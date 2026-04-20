@@ -1,0 +1,50 @@
+# === LaTeX build artifacts ===
+build/
+*.aux
+*.log
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+*.synctex(busy)
+*.bbl
+*.blg
+*.bcf
+*.run.xml
+*.nav
+*.snm
+*.vrb
+*.idx
+*.ilg
+*.ind
+*.glg
+*.glo
+*.gls
+*.ist
+
+# === Google Drive sync temp ===
+.tmp.drivedownload/
+.tmp.driveupload/
+
+# === Windows system files ===
+desktop.ini
+Thumbs.db
+ehthumbs.db
+
+# === IDE / editor ===
+.vscode/
+.idea/
+
+# === Agent / AI context (personal) ===
+.agent/
+.agents/
+.gemini/
+
+# === Subproject (separate repo) ===
+zigbee-ble-orchestration-platform/
+
+# === Old/reference report ===
+final_rp_da2/
