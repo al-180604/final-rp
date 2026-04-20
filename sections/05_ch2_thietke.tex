@@ -1,0 +1,311 @@
+% ========================================
+% CHƯƠNG 2: THIẾT KẾ HỆ THỐNG
+% ========================================
+\chapter{THIẾT KẾ HỆ THỐNG}
+\label{ch:thietke}
+
+% ----- TÓM TẮT CHƯƠNG -----
+\vspace{0.5cm}
+\noindent\textit{Chương này trình bày quá trình thiết kế hệ thống
+Smart Home Platform, bao gồm phân tích yêu cầu chức năng và phi
+chức năng, thiết kế vai trò thiết bị trong mạng Zigbee, data model
+và MQTT message format, logic flow và command lifecycle, kiến trúc
+cloud backend, và các quyết định trade-off quan trọng.}
+\vspace{0.5cm}
+
+% ========================================
+\section{Yêu cầu chức năng và phi chức năng}
+\label{sec:ch2-requirements}
+
+\subsection{Yêu cầu chức năng}
+\label{sec:ch2-func-req}
+
+Hệ thống cần quản lý danh sách home, room và device qua REST API,
+cho phép điều khiển bật/tắt đèn thông qua cluster 0x0006 từ cloud
+xuống thiết bị Zigbee. Telemetry và event từ thiết bị phải được nhận
+và lưu bền vững vào PostgreSQL. Vòng đời lệnh được theo dõi chặt
+chẽ với các trạng thái chuẩn: accepted $\rightarrow$ queued
+$\rightarrow$ sent $\rightarrow$ executed $|$ failed $|$ timeout.
+Hệ thống cần phát hiện presence qua Occupancy Sensor, trong đó local
+binding có sẵn nhờ Zigbee, đồng thời cho phép join thiết bị mới qua
+cơ chế permit-join của Z3Gateway.
+
+\subsection{Yêu cầu phi chức năng}
+\label{sec:ch2-nonfunc-req}
+
+Hệ thống phải deploy được trên EC2 bằng docker-compose
+(\texttt{deploy/docker-compose.prod.yml}). Timeout mặc định cho
+command là 5000~ms (\texttt{SB\_COMMAND\_TIMEOUT\_MS}). Broker cấu
+hình ACL tách biệt principal gateway/client/monitor/bridge để giới
+hạn quyền theo nguyên tắc least privilege. Hệ thống chịu được
+disconnect internet ngắn hạn nhờ local control qua binding, đảm bảo
+thiết bị vẫn hoạt động ngay cả khi mất kết nối cloud.
+
+% ========================================
+\section{Network và Device Roles (Zigbee)}
+\label{sec:ch2-device-roles}
+
+Coordinator/NCP chạy trên EFR32MG12 với firmware
+\texttt{end\_devices/NCP}, giao tiếp host qua EZSP/ASH. Router gồm
+Z3Light và Z3Switch, luôn online và relay mesh. End Device là
+Occupancy Sensor, hoạt động ngắt quãng và gửi event khi phát hiện
+chuyển động.
+
+\begin{table}[H]
+\centering
+\caption{Ánh xạ device type và cluster chính}
+\label{tab:ch2-device-roles}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Device} & \textbf{Zigbee Role} & \textbf{Server Clusters}
+  & \textbf{Client Clusters} \\ \hline
+Coordinator/NCP & ZC / Trust Center & -- & On/Off Client \\ \hline
+Light Device & ZR (Router) & On/Off (0x0006) & -- \\ \hline
+Switch Device & ZR (Router) & -- & On/Off (0x0006) \\ \hline
+Occupancy Sensor & ZED (SED) & Occupancy Sensing (0x0406) & -- \\ \hline
+\end{tabular}
+\end{table}
+
+Bảng ánh xạ trên tương ứng với mô tả trong
+\texttt{docs/DEVICE\_CAPABILITY\_MATRIX.md} và
+\texttt{docs/ADAPTER\_ACTION\_MAP.md}. Light sử dụng cluster On/Off
+0x0006 phía server, Switch sử dụng cluster On/Off phía client kết
+hợp binding, còn Occupancy Sensor sử dụng cluster Occupancy Sensing.
+
+% ========================================
+\section{Data và Message Design}
+\label{sec:ch2-data-design}
+
+\subsection{MQTT Message Channels}
+\label{sec:ch2-channels}
+
+Hệ thống phân tách message thành năm kênh chính theo hướng truyền
+và ngữ nghĩa.
+
+\begin{table}[H]
+\centering
+\caption{Thiết kế các kênh MQTT}
+\label{tab:ch2-channels}
+\begin{tabular}{|l|l|l|l|}
+\hline
+\textbf{Channel} & \textbf{Hướng} & \textbf{Publisher}
+  & \textbf{Subscriber} \\ \hline
+reported & Uplink & gateway & cloud \\ \hline
+event & Uplink & gateway & cloud \\ \hline
+reply & Uplink & gateway & cloud \\ \hline
+desired & Downlink & cloud & gateway \\ \hline
+command & Downlink & cloud & gateway \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{State Message Design}
+\label{sec:ch2-telemetry}
+
+Trạng thái thiết bị publish trên kênh reported mang payload chứa
+\texttt{device\_id} logic, eui64 phần cứng và các attribute (ví dụ
+\texttt{on\_off: true/false} cho đèn). Cloud ghi vào bảng
+\texttt{device\_states} trong PostgreSQL.
+
+\begin{lstlisting}[language={}, caption={Light reported state message}]
+{
+  "schema": "sb.v1",
+  "msg_id": "550e8400-e29b-41d4-a716",
+  "ts": "2026-01-15T10:30:00Z",
+  "source": "gateway",
+  "payload": {
+    "device_id": "light_01",
+    "device_type": "light",
+    "eui64": "00:11:22:33:44:55:66:77",
+    "on_off": true,
+    "endpoint": 1
+  }
+}
+\end{lstlisting}
+
+\subsection{Command Message Design}
+\label{sec:ch2-commands}
+
+Command từ cloud mang envelope chuẩn với payload chứa action cụ thể
+(ví dụ \texttt{\{"action": "on\_off", "value": true\}}).
+\texttt{msg\_id} là UUID để dedup; \texttt{correlation\_id} sẽ được
+gateway echo lại trong reply để cloud map về
+\texttt{commands.id}.
+
+\begin{lstlisting}[language={}, caption={Command request message}]
+{
+  "schema": "sb.v1",
+  "msg_id": "cmd-uuid-001",
+  "ts": "2026-01-15T10:31:00Z",
+  "source": "cloud",
+  "payload": {
+    "command_id": "cmd-uuid-001",
+    "target_device": "light_01",
+    "action": "on_off",
+    "value": true
+  }
+}
+\end{lstlisting}
+
+\begin{lstlisting}[language={}, caption={Command reply message}]
+{
+  "schema": "sb.v1",
+  "msg_id": "reply-uuid-001",
+  "ts": "2026-01-15T10:31:02Z",
+  "source": "gateway",
+  "correlation_id": "cmd-uuid-001",
+  "payload": {
+    "command_id": "cmd-uuid-001",
+    "status": "executed",
+    "message": "ZCL On/Off command sent successfully"
+  }
+}
+\end{lstlisting}
+
+\subsection{Versioning Rule}
+\label{sec:ch2-versioning}
+
+Namespace chứa phiên bản: \texttt{sb/v1/...}; envelope có trường
+\texttt{schema: "sb.v1"}. Thay đổi không tương thích đòi hỏi bump
+lên v2, giữ song song hai phiên bản trong giai đoạn chuyển tiếp.
+Thêm field mới vào payload không phá vỡ consumer cũ (consumer bỏ qua
+field không biết), nhưng xóa field hoặc đổi kiểu dữ liệu yêu cầu
+nâng phiên bản.
+
+% ========================================
+\section{Logic Flow và State Machine}
+\label{sec:ch2-logic-flow}
+
+\subsection{Light Device State Machine}
+\label{sec:ch2-light-fsm}
+
+Thiết bị đèn chỉ có hai trạng thái kiên định ON và OFF đối với
+cluster 0x0006. Trạng thái thay đổi qua ZCL command (từ gateway hoặc
+switch bound trực tiếp) và phản hồi qua attribute report về
+\texttt{telemetry\_rx.c}. Sau mỗi transition, Light Device cập nhật
+thuộc tính \texttt{OnOff} trong On/Off Server Cluster, đổi trạng thái
+LED vật lý và gửi Report Attributes lên Coordinator.
+
+\subsection{Command Lifecycle}
+\label{sec:ch2-gateway-flow}
+
+Mỗi command đi qua một vòng đời với các trạng thái theo dõi rõ ràng:
+accepted $\rightarrow$ queued $\rightarrow$ sent $\rightarrow$
+executed $|$ failed $|$ timeout.
+
+Gateway phát các chuyển tiếp accepted, queued và sent. Gateway hoặc
+cloud timeout worker phát timeout. Device reply (qua gateway) phát
+executed hoặc failed. Mọi reply đều mang
+\texttt{correlation\_id = \{command\_id\}}, cho phép cloud cập nhật
+trạng thái command trong database khi nhận reply.
+
+\subsection{Gateway Runtime Flow}
+\label{sec:ch2-app-flow}
+
+Tiến trình Z3Gateway khởi tạo theo thứ tự: \texttt{net\_mgr} form
+network, \texttt{app\_mqtt} connect broker và subscribe
+desired/command, \texttt{device\_registry} khởi tạo bảng trống,
+\texttt{cmd\_handler} bắt đầu loop dispatch. Khi có message command,
+\texttt{cmd\_handler.c} giải mã envelope, kiểm tra schema, gọi
+\texttt{device\_dispatch.c} để chọn module (\texttt{light\_ctrl} hay
+\texttt{switch\_logic}), rồi gateway emit accepted/queued/sent và
+chờ reply từ NCP trước khi emit executed hoặc failed.
+
+% ========================================
+\section{Cloud Backend Architecture}
+\label{sec:ch2-cloud}
+
+\subsection{Kiến trúc tổng quan}
+\label{sec:ch2-cloud-arch}
+
+Ứng dụng FastAPI được tổ chức theo layer. \texttt{main.py} khởi tạo
+app cùng lifespan (database, MQTT, worker). \texttt{config.py} sử
+dụng pydantic-settings với prefix \texttt{SB\_}. \texttt{database.py}
+tạo async engine và session factory. \texttt{models.py} định nghĩa
+bảy bảng ORM. \texttt{schemas.py} chứa Pydantic request/response.
+\texttt{mqtt\_client.py} subscribe reported/event/reply rồi ghi vào
+database, đồng thời expose hàm publish cho router commands.
+\texttt{command\_timeout.py} là worker sweep commands quá hạn sang
+trạng thái timeout. Thư mục \texttt{routers/} chứa các module health,
+devices, commands và events.
+
+\subsection{Database Design}
+\label{sec:ch2-db-schema}
+
+PostgreSQL schema (file \texttt{database/schema.sql}, tương ứng
+\texttt{cloud/app/models.py}) gồm bảy bảng chính.
+
+\begin{table}[H]
+\centering
+\caption{Các bảng database chính}
+\label{tab:ch2-db-tables}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Bảng} & \textbf{Vai trò} \\ \hline
+\texttt{homes} & Đơn vị tổ chức cấp cao nhất \\ \hline
+\texttt{rooms} & Thuộc home, nhóm thiết bị \\ \hline
+\texttt{users} & Người dùng \\ \hline
+\texttt{devices} & Thiết bị Zigbee (khóa logic device\_id, kèm eui64) \\ \hline
+\texttt{device\_states} & Trạng thái gần nhất của từng device \\ \hline
+\texttt{events} & Log event lâu bền \\ \hline
+\texttt{commands} & Vòng đời lệnh với state enum \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{REST API Endpoints}
+\label{sec:ch2-api}
+
+\begin{table}[H]
+\centering
+\caption{REST API endpoints chính}
+\label{tab:ch2-api-endpoints}
+\begin{tabular}{|l|l|p{6cm}|}
+\hline
+\textbf{Method} & \textbf{Path} & \textbf{Ý nghĩa} \\ \hline
+GET & \texttt{/health} & Healthcheck \\ \hline
+GET & \texttt{/api/devices} & Liệt kê thiết bị, filter \texttt{?room\_id=} \\ \hline
+GET & \texttt{/api/devices/\{device\_id\}} & Chi tiết thiết bị \\ \hline
+GET & \texttt{/api/devices/\{device\_id\}/state} & Trạng thái gần nhất \\ \hline
+POST & \texttt{/api/devices/\{device\_id\}/command} & Tạo lệnh, publish MQTT \\ \hline
+GET & \texttt{/api/commands/\{command\_id\}} & Tra cứu lệnh theo id \\ \hline
+GET & \texttt{/api/events} & Lọc event theo device\_id, event\_type, limit, offset \\ \hline
+\end{tabular}
+\end{table}
+
+\subsection{MQTT -- Database Integration}
+\label{sec:ch2-mqtt-db}
+
+\texttt{mqtt\_client.py} là lớp kết nối giữa hai thế giới: subscribe
+các topic uplink rồi ghi database qua session async, đồng thời expose
+hàm publish để \texttt{routers/commands.py} gọi khi tạo lệnh mới.
+Worker \texttt{command\_timeout.py} chạy nền, định kỳ quét bảng
+commands để chuyển những bản ghi quá
+\texttt{SB\_COMMAND\_TIMEOUT\_MS} sang state timeout.
+
+% ========================================
+\section{Trade-offs và Quyết định thiết kế}
+\label{sec:ch2-tradeoffs}
+
+\textbf{Loại bỏ cầu nối Python $\leftrightarrow$ gateway (tháng
+4/2026).} Trước đây có một process Python
+(\texttt{gateway/src/bridge.py}) làm trung gian
+MQTT$\leftrightarrow$IPC qua Unix socket và NDJSON. Quyết định gộp
+client MQTT vào Z3Gateway C loại bỏ một process, một format wire và
+một lớp lỗi (latency IPC, reconnect hai phía). Đổi lại, mọi thay
+đổi contract MQTT phải đồng bộ trong C code thay vì Python thuần.
+
+\textbf{device\_id logic thay vì eui64 hay nwk\_addr.} eui64 là danh
+tính bền nhưng gắn chặt phần cứng, nwk\_addr thì đổi mỗi lần
+rejoin. Chọn \texttt{device\_id} tự sinh giúp database ổn định qua
+các thay đổi hardware và tránh leak thông tin MAC.
+
+\textbf{Retain cho state, không retain cho command.} State có thể an
+toàn retain để client mới đọc được trạng thái gần nhất; command
+retain sẽ gây replay sai khi gateway reconnect.
+
+\textbf{Timeout ở cả gateway lẫn cloud.} Gateway phát timeout khi
+NCP không reply; cloud worker cũng có vòng sweep phòng trường hợp
+gateway không gửi được timeout (mất kết nối). Hai lớp độc lập giảm
+rủi ro lệnh treo vĩnh viễn.
+
+
+\newpage

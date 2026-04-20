@@ -1,0 +1,215 @@
+% ========================================
+% MAIN.TEX - Entry point for the report
+% Compile: pdfLaTeX with synctex=1
+% Tuân thủ RULE.md - Quy định ĐATN HUST
+% Đề tài: Smart Home Zigbee Platform
+% ========================================
+\documentclass[a4paper,12pt]{report}
+
+% ===== PACKAGES =====
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{mathptmx}  % Times New Roman fallback
+
+% Layout theo RULE.md: trên 2.5cm, dưới 2cm, trái 3cm, phải 2cm
+\usepackage[left=3cm, right=2cm, top=2.5cm, bottom=2cm]{geometry}
+\usepackage{setspace}
+\singlespacing  % line spacing 1.0 theo quy định
+
+% Thụt đầu dòng 1cm
+\usepackage{indentfirst}
+\setlength{\parindent}{1cm}
+
+% Số trang cuối trang, bên phải (bottom-right) theo RULE.md
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyfoot[R]{\thepage}
+\renewcommand{\headrulewidth}{0pt}
+\fancypagestyle{plain}{%
+  \fancyhf{}
+  \fancyfoot[R]{\thepage}
+  \renewcommand{\headrulewidth}{0pt}
+}
+
+% Graphics & Tables
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{longtable}
+
+% TikZ for cover page border
+\usepackage{tikz}
+\usetikzlibrary{calc}
+
+% Lists - support a), b), c) at deep levels
+\usepackage{enumitem}
+\setlist[enumerate,1]{label=\arabic*.}
+\setlist[enumerate,2]{label=\alph*)}
+\setlist[enumerate,3]{label=\roman*)}
+
+% Captions
+\usepackage{caption}
+\captionsetup{labelsep=colon, font=small}
+
+% Code listings
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\small,
+  breaklines=true,
+  frame=single,
+  columns=fullflexible,
+  extendedchars=true,
+  inputencoding=utf8,
+  literate={á}{{\\'a}}1 {é}{{\\'e}}1 {í}{{\\'i}}1 {ó}{{\\'o}}1 {ú}{{\\'u}}1
+           {Á}{{\\'A}}1 {É}{{\\'E}}1 {Í}{{\\'I}}1 {Ó}{{\\'O}}1 {Ú}{{\\'U}}1
+           {à}{{\`a}}1 {è}{{\`e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1
+           {ă}{{\u{a}}}1 {ơ}{{\ohorn}}1 {ư}{{\uhorn}}1
+           {<}{{\textless}}1 {>}{{\textgreater}}1
+}
+
+% Đổi tên Listing thành tiếng Việt
+\renewcommand{\lstlistingname}{Mã nguồn}
+
+% Math
+\usepackage{amsmath, amssymb}
+
+% Colors
+\usepackage{xcolor}
+
+% ===== CHAPTER/SECTION FORMATTING theo RULE.md =====
+\usepackage{titlesec}
+\setcounter{secnumdepth}{4}
+
+% Chương: 18pt Bold, canh giữa, sang trang mới
+\titleformat{\chapter}[display]
+  {\normalfont\fontsize{18pt}{22pt}\selectfont\bfseries\centering}
+  {\MakeUppercase{\chaptertitlename}\ \thechapter}
+  {0pt}
+  {\fontsize{18pt}{22pt}\selectfont\MakeUppercase}
+\titlespacing*{\chapter}{0pt}{0pt}{30pt}
+
+% Mục (Section): 16pt Bold, canh trái
+\titleformat{\section}
+  {\normalfont\fontsize{16pt}{20pt}\selectfont\bfseries}
+  {\thesection}
+  {1em}
+  {}
+\titlespacing*{\section}{0pt}{20pt}{10pt}
+
+% Tiểu mục (Subsection): 14pt Bold, canh trái
+\titleformat{\subsection}
+  {\normalfont\fontsize{14pt}{18pt}\selectfont\bfseries}
+  {\thesubsection}
+  {1em}
+  {}
+\titlespacing*{\subsection}{0pt}{15pt}{8pt}
+
+% Sub-subsection: 13pt Bold, canh trái
+\titleformat{\subsubsection}
+  {\normalfont\fontsize{13pt}{16pt}\selectfont\bfseries}
+  {\thesubsubsection}
+  {1em}
+  {}
+\titlespacing*{\subsubsection}{0pt}{12pt}{6pt}
+
+% Paragraph as a), b), c)
+\titleformat{\paragraph}[runin]{\normalfont\normalsize\bfseries}{\theparagraph)}{1em}{}
+\titlespacing*{\paragraph}{0pt}{3.25ex plus 1ex minus .2ex}{1em}
+\renewcommand{\theparagraph}{\alph{paragraph}}
+
+% ===== HYPERREF & NAVIGATION (must be loaded near last) =====
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=blue,
+  urlcolor=blue,
+  bookmarksnumbered=true,
+  bookmarksopen=true,
+  bookmarksopenlevel=2,
+  pdfstartview=FitH,
+  pdftitle={Nền tảng Smart Home dựa trên Zigbee},
+  pdfauthor={Author},
+  pdfsubject={Smart Home IoT Report}
+}
+\usepackage{bookmark}
+
+% ===== CUSTOM COMMANDS =====
+\newcommand{\todo}[1]{\textcolor{red}{\textbf{TODO:} #1}}
+
+% Command for chapter opening page
+\newcommand{\chapteropening}[2]{%
+  \chapter{#1}
+  \label{#2}
+  \thispagestyle{plain}
+  \vspace*{\fill}
+  \begin{center}
+    \textit{(Tóm tắt nội dung chương sẽ được viết ở đây)}
+  \end{center}
+  \vspace*{\fill}
+  \newpage
+}
+
+% ===== DOCUMENT START =====
+\begin{document}
+
+% ----- TRANG BÌA (không đánh số) -----
+\pagenumbering{gobble}  % Ẩn số trang cho bìa
+\input{sections/00_cover}
+
+% ----- LỜI CẢM ƠN (không đánh số trang) -----
+\input{sections/00a_loicamon}
+
+% ----- MỤC LỤC (bắt đầu đánh số từ trang 1) -----
+\cleardoublepage
+\pagenumbering{arabic}  % Bắt đầu đánh số arabic
+\setcounter{page}{1}    % Trang 1 = MỤC LỤC
+\tableofcontents
+\thispagestyle{fancy}   % Đảm bảo hiển thị số trang
+\clearpage
+
+% Danh mục ký hiệu và chữ viết tắt
+\input{sections/01_acronyms}
+\clearpage
+
+% Danh mục hình ảnh (thêm vào TOC)
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH SÁCH HÌNH VẼ}
+\listoffigures
+\clearpage
+
+% Danh mục bảng biểu (thêm vào TOC)
+\phantomsection
+\addcontentsline{toc}{chapter}{DANH SÁCH BẢNG}
+\listoftables
+\clearpage
+
+% Phân chia công việc
+\input{sections/02_duty_roster}
+
+% ----- MỞ ĐẦU (không đánh số chương) -----
+\input{sections/03_modau}
+
+% ----- CHƯƠNG 1: TỔNG QUAN HỆ THỐNG & CƠ SỞ LÝ THUYẾT -----
+\input{sections/04_ch1_tongquan}
+
+% ----- CHƯƠNG 2: THIẾT KẾ HỆ THỐNG -----
+\input{sections/05_ch2_thietke}
+
+% ----- CHƯƠNG 3: TRIỂN KHAI HỆ THỐNG -----
+\input{sections/06_ch3_trienkhai}
+
+% ----- CHƯƠNG 4: KẾT QUẢ VÀ ĐÁNH GIÁ -----
+\input{sections/07_ch4_ketqua}
+
+% ----- CHƯƠNG 5: KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN -----
+\input{sections/08_ch5_ketluan}
+
+% ----- TÀI LIỆU THAM KHẢO -----
+\input{sections/09_references}
+
+\end{document}

@@ -1,0 +1,91 @@
+% ========================================
+% TRANG BÌA - COVER PAGE
+% Bố cục theo mẫu ĐATN HUST
+% ========================================
+\thispagestyle{empty}
+
+% ----- KHUNG VIỀN TRANG BÌA -----
+\begin{tikzpicture}[overlay,remember picture]
+\draw [line width=3pt]
+    ($ (current page.north west) + (2.0cm,-1.0cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.0cm,1.0cm) $);
+\draw [line width=0.5pt]
+    ($ (current page.north west) + (2.15cm,-1.15cm) $)
+    rectangle
+    ($ (current page.south east) + (-1.15cm,1.15cm) $); 
+\end{tikzpicture}
+
+% ----- PHẦN HEADER: Trường + Logo -----
+\begin{center}
+\vspace*{-1.5cm} % Pull the header up closer to the border
+\textbf{\fontsize{14pt}{17pt}\selectfont ĐẠI HỌC BÁCH KHOA HÀ NỘI}\\[4pt]
+\textbf{\fontsize{14pt}{17pt}\selectfont TRƯỜNG ĐIỆN -- ĐIỆN TỬ}
+
+\vspace{0.8cm}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.15\textwidth]{Images/logoBK.png}
+\end{figure}
+\vspace{0.6cm}
+
+% ----- LOẠI BÁO CÁO -----
+\textbf{\fontsize{28pt}{34pt}\selectfont ĐỒ ÁN TỐT NGHIỆP}
+
+\vspace{1.2cm}
+
+% ----- TÊN ĐỀ TÀI -----
+{\fontsize{20pt}{26pt}\selectfont \textbf{Hệ thống Smart Building\\[6pt] với Zigbee và BLE}}
+
+\vspace{1.5cm}
+
+% ----- THÔNG TIN SINH VIÊN -----
+% === Sinh viên 1 ===
+{\fontsize{14pt}{20pt}\selectfont \textbf{Lê Đức Anh} -- 20224403}\\[2pt]
+{\fontsize{12pt}{16pt}\selectfont \textit{anh.ld224403@sis.hust.edu.vn}}\\[10pt]
+% === Sinh viên 2 ===
+{\fontsize{14pt}{20pt}\selectfont \textbf{Chu Thiên Phú} -- 20224450}\\[2pt]
+{\fontsize{12pt}{16pt}\selectfont \textit{phu.ct224450@sis.hust.edu.vn}}
+
+\vspace{0.8cm}
+
+% ----- NGÀNH / CHUYÊN NGÀNH -----
+{\fontsize{14pt}{20pt}\selectfont
+\textbf{Ngành:} Kỹ thuật Điện tử -- Viễn thông\\[4pt]
+\textbf{Chuyên ngành:} Hệ thống nhúng thông minh và IoT
+}
+
+\end{center}
+
+\vfill
+
+% ----- PHẦN CUỐI: GVHD + CHỮ KÝ + KHOA -----
+\noindent
+\hspace{1.5cm}%
+\begin{minipage}[t]{0.88\textwidth}
+
+% --- Dòng GVHD ---
+\begin{tabular}{@{}p{4.5cm}p{3.5cm}l@{}}
+{\fontsize{13pt}{18pt}\selectfont \textbf{Giáo viên hướng dẫn:}} &
+{\fontsize{13pt}{18pt}\selectfont Phạm Thị Nhẫn} &
+\rule{3.5cm}{0.4pt} \\[-2pt]
+& &
+{\fontsize{11pt}{14pt}\selectfont \textit{Chữ ký của GVHD}}
+\\[0.3cm]
+\end{tabular}
+
+% --- Dòng KHOA ---
+{\fontsize{13pt}{18pt}\selectfont \textbf{KHOA:}\hspace{1cm} \textit{(Điền tên khoa)}}
+
+\end{minipage}
+
+\vspace{1.8cm}
+
+% ----- ĐỊA ĐIỂM + THỜI GIAN -----
+\begin{center}
+{\fontsize{14pt}{17pt}\selectfont Hà Nội, 01/2026}
+\end{center}
+
+\vspace{0.5cm}
+
+\clearpage

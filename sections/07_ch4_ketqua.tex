@@ -1,0 +1,83 @@
+% ========================================
+% CHƯƠNG 4: KẾT QUẢ VÀ ĐÁNH GIÁ
+% (ADD_NEW - placeholder)
+% ========================================
+\chapter{KẾT QUẢ VÀ ĐÁNH GIÁ}
+\label{ch:ketqua}
+
+% ----- TÓM TẮT CHƯƠNG -----
+\vspace{0.5cm}
+\noindent\textit{Chương này trình bày kết quả chạy hệ thống Smart Home Platform, bao gồm điều kiện thử nghiệm, kết quả end-to-end, kết quả từng thành phần và đánh giá hiệu năng.}
+\vspace{0.5cm}
+
+% ========================================
+\section{Điều kiện chạy thử (Test Setup)}
+\label{sec:ch4-test-setup}
+
+\textbf{Hardware:}
+\begin{itemize}
+    \item 1x Coordinator: EFR32MG12 Wireless Starter Kit (BRD4162A)
+    \item 1x Light Device: EFR32MG12 Radio Board (BRD4162A)
+    \item 1x Switch Device: EFR32MG12 Radio Board (BRD4162A)
+    \item 1x Occupancy Sensor: EFR32MG12 Radio Board (BRD4162A)
+    \item Gateway: Ubuntu Linux (laptop / Raspberry Pi)
+\end{itemize}
+
+\textbf{Software:}
+\begin{itemize}
+    \item Simplicity Studio v5 with Gecko SDK 4.5.x
+    \item MQTT Broker (Mosquitto / Cloud)
+    \item Firebase (Realtime DB / Firestore)
+    \item Flutter App (Android / iOS)
+\end{itemize}
+
+\textbf{Connectivity:}
+\begin{itemize}
+    \item UART: 115200 baud, 8N1
+    \item MQTT: Cloud broker, QoS 0/1
+    \item Zigbee: Channel 11, centralized Trust Center
+\end{itemize}
+
+% ========================================
+\section{Kết quả End-to-end}
+\label{sec:ch4-e2e-results}
+
+(Viết kết quả kiểm chứng 2 luồng chính:)
+
+\begin{itemize}
+    \item \textbf{Luồng Uplink:} Occupancy Sensor / Light $\rightarrow$ Zigbee $\rightarrow$ Coordinator $\rightarrow$ UART $\rightarrow$ Gateway $\rightarrow$ MQTT $\rightarrow$ Cloud $\rightarrow$ Flutter App
+    \item \textbf{Luồng Downlink:} Flutter App $\rightarrow$ Cloud $\rightarrow$ MQTT $\rightarrow$ Gateway $\rightarrow$ UART $\rightarrow$ Coordinator $\rightarrow$ Zigbee $\rightarrow$ Light Device $\rightarrow$ ACK/State $\rightarrow$ App
+\end{itemize}
+
+% ========================================
+\section{Kết quả từng thành phần}
+\label{sec:ch4-component-results}
+
+\subsection{Zigbee Network}
+\label{sec:ch4-zigbee-results}
+
+(Viết kết quả: form network, join, binding, command/report hoạt động. Thêm hình khi có.)
+
+\subsection{Gateway Service}
+\label{sec:ch4-gateway-results}
+
+(Viết kết quả: UART parse, MQTT bridge, rules engine, ACK routing.)
+
+\subsection{Cloud Firebase}
+\label{sec:ch4-cloud-results}
+
+(Viết kết quả: device state sync, command relay, event logging.)
+
+\subsection{Flutter Mobile App}
+\label{sec:ch4-app-results}
+
+(Viết kết quả: UI screenshots, realtime update, light control.)
+
+% ========================================
+\section{Đánh giá hiệu năng}
+\label{sec:ch4-performance}
+
+(Viết đánh giá: latency end-to-end, reliability, energy profiler kết quả nếu có.)
+
+
+\newpage

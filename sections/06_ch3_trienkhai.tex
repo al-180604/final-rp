@@ -1,0 +1,317 @@
+% ========================================
+% CHƯƠNG 3: TRIỂN KHAI HỆ THỐNG
+% ========================================
+\chapter{TRIỂN KHAI HỆ THỐNG}
+\label{ch:trienkhai}
+
+% ----- TÓM TẮT CHƯƠNG -----
+\vspace{0.5cm}
+\noindent\textit{Chương này trình bày quá trình triển khai hệ thống
+Smart Home Platform, bao gồm firmware cho các node Zigbee
+(Coordinator/NCP, Light, Switch, Occupancy), Gateway Service viết
+bằng C với MQTT trực tiếp, Cloud Backend (FastAPI + PostgreSQL +
+Mosquitto) deploy trên AWS EC2, và luồng end-to-end command/state
+flow.}
+\vspace{0.5cm}
+
+% ========================================
+% 3.1 FIRMWARE ARCHITECTURE
+% ========================================
+\section{Triển khai Firmware}
+\label{sec:ch3-firmware}
+
+Firmware end device được build bằng Simplicity Studio cùng Gecko SDK.
+Mỗi loại thiết bị có project riêng trong thư mục
+\texttt{end\_devices/}.
+
+% ----------------------------------------
+\subsection{Cấu trúc Firmware Coordinator}
+\label{sec:ch3-coordinator-modules}
+
+Firmware \texttt{end\_devices/NCP} chạy trên EFR32MG12 đóng vai trò
+NCP thuần, không có application logic, chỉ phơi EZSP/ASH qua UART
+để host Z3Gateway lái. Điều này tách biệt radio stack (trên NCP)
+khỏi logic ứng dụng (trên host Linux), cho phép cập nhật gateway mà
+không cần reflash chip radio.
+
+% ----------------------------------------
+\subsection{Firmware Light Device}
+\label{sec:ch3-light-modules}
+
+Firmware Z3Light là router Zigbee~3.0, implement cluster On/Off 0x0006
+server side. Khi nhận ZCL command, firmware bật/tắt GPIO điều khiển
+đèn và gửi attribute report ngược lại để cluster client (gateway hoặc
+switch) biết trạng thái thực tế. LED0 trên mainboard phản ánh trạng
+thái đèn: ON khi sáng, OFF khi tắt.
+
+% ----------------------------------------
+\subsection{Firmware Switch Device}
+\label{sec:ch3-switch-modules}
+
+Firmware Z3Switch đóng vai trò router, triển khai cluster On/Off
+client side. Sau khi bind với Light, switch phát trực tiếp lệnh
+Toggle tới endpoint đã bind mà không cần qua gateway, đây là cơ
+chế local control (Mục~\ref{sec:ch1-dataflow-local}). PB0 dùng để
+gửi ZCL Toggle Command, PB1 dùng cho Network Steering khi join mạng.
+
+% ----------------------------------------
+\subsection{Firmware Occupancy Sensor}
+\label{sec:ch3-occupancy-modules}
+
+Firmware Occupancy triển khai cluster Occupancy Sensing, phát event
+khi phát hiện chuyển động. Gateway lắng nghe event này qua
+\texttt{telemetry\_rx.c} và chuyển thành message MQTT event lên cloud.
+Thiết bị hoạt động ở chế độ Sleepy End Device, tối ưu cho nguồn pin.
+
+
+% ========================================
+% 3.2 GATEWAY SERVICE
+% ========================================
+\section{Triển khai Gateway Service}
+\label{sec:ch3-gateway}
+
+% ----------------------------------------
+\subsection{Thiết lập môi trường}
+\label{sec:ch3-setup}
+
+Build bằng Simplicity Studio hoặc trực tiếp qua
+\texttt{Z3Gateway.Makefile}. Binary runtime cần hai thứ: UART device
+kết nối NCP và broker MQTT (cấu hình trong \texttt{app\_config.h}
+hoặc biến môi trường). Không còn pytest cho gateway vì các test
+Python cũ thuộc cầu nối đã loại bỏ không còn giá trị.
+
+% ----------------------------------------
+\subsection{Kiến trúc đa luồng}
+\label{sec:ch3-threading}
+
+Các module C trong \texttt{Z3GatewayHost/app/} phối hợp quanh event
+loop chính do Z3Gateway framework cung cấp. \texttt{app\_mqtt} xử lý
+I/O MQTT, \texttt{cmd\_handler} xử lý callback message,
+\texttt{telemetry\_rx} nhận callback ZCL attribute,
+\texttt{device\_monitor} cập nhật presence. Tất cả chia sẻ cấu trúc
+\texttt{device\_registry} trong RAM.
+
+% ----------------------------------------
+\subsection{Giao tiếp Host--NCP: EZSP/ASH và MQTT trực tiếp}
+\label{sec:ch3-uart-impl}
+
+Đề cương gốc nhắc tới ``UART Line Protocol'' nhưng đây là kiến trúc
+cũ đã bị loại bỏ. Trong triển khai hiện tại, gateway không định
+nghĩa framing tùy biến trên UART: lớp vật lý/liên kết do ASH đảm
+nhiệm, lớp ứng dụng do EZSP đảm nhiệm, cả hai thuộc Silicon Labs
+stack. Phía cloud, gateway nói MQTT trực tiếp qua
+\texttt{app\_mqtt.c}, không còn Unix socket
+\texttt{/tmp/sb-gateway.sock}, không còn NDJSON IPC, không còn
+process Python trung gian.
+
+% ----------------------------------------
+\subsection{Cơ chế Correlation ID}
+\label{sec:ch3-correlation}
+
+Khi nhận command, \texttt{cmd\_handler.c} lấy \texttt{msg\_id} của
+envelope và echo vào \texttt{correlation\_id} của mọi reply kế tiếp
+(accepted, queued, sent, executed/failed). Cloud dựa trên
+\texttt{correlation\_id} để map reply về bản ghi commands gốc và cập
+nhật state tương ứng.
+
+% ----------------------------------------
+\subsection{Chính sách Timeout và Retry}
+\label{sec:ch3-timeout-retry}
+
+Cloud có worker \texttt{command\_timeout.py} quét bảng commands, bản
+ghi nào quá \texttt{SB\_COMMAND\_TIMEOUT\_MS} (mặc định 5000~ms) mà
+chưa có reply executed/failed sẽ bị set state timeout. Phía gateway,
+nếu NCP không trả reply trong ngưỡng nội bộ, \texttt{cmd\_handler.c}
+cũng emit timeout qua MQTT. Hai lớp timeout hoạt động độc lập nhằm
+giảm rủi ro lệnh treo vĩnh viễn.
+
+% ----------------------------------------
+\subsection{Rules Engine}
+\label{sec:ch3-rules}
+
+Module \texttt{rule\_engine.c/h} cùng \texttt{sb\_command.c/h} chứa
+helper cho command struct và đánh giá rule. Chi tiết rules engine hiện
+chỉ mới có khung module, triển khai đầy đủ vẫn đang phát triển và
+không có dữ liệu chi tiết hơn trong phạm vi hiện tại.
+
+% ----------------------------------------
+\subsection{Admin API}
+\label{sec:ch3-admin-api}
+
+Gateway không expose HTTP admin API riêng. Mọi tương tác quản trị đều
+đi qua MQTT (command/desired) hoặc qua REST API của cloud. Tính năng
+HTTP admin trực tiếp trên gateway chưa được triển khai trong phạm vi
+dự án.
+
+
+% ========================================
+% 3.3 CLOUD (FastAPI + PostgreSQL + EC2)
+% ========================================
+\section{Triển khai Cloud (FastAPI + PostgreSQL + EC2)}
+\label{sec:ch3-cloud}
+
+Đề cương gốc ghi ``Firebase'' là không chính xác vì dự án không sử
+dụng Firebase. Stack thực tế là FastAPI + PostgreSQL + Mosquitto, đóng
+gói Docker, deploy trên AWS EC2.
+
+% ----------------------------------------
+\subsection{Thiết lập Cloud Stack}
+\label{sec:ch3-cloud-setup}
+
+Phát triển cục bộ thực hiện qua các lệnh:
+\texttt{pip install -r cloud/requirements.txt} để cài đặt phụ thuộc,
+\texttt{python -m cloud.app.seed} để seed dữ liệu mẫu,
+\texttt{python -m cloud} để chạy API với Swagger tại
+\texttt{http://localhost:8000/docs}, và \texttt{pytest cloud/tests/}
+để chạy test.
+
+\begin{table}[H]
+\centering
+\caption{Biến môi trường Cloud (prefix \texttt{SB\_})}
+\label{tab:ch3-cloud-env}
+\begin{tabular}{|l|p{8cm}|}
+\hline
+\textbf{Biến} & \textbf{Mặc định} \\ \hline
+\texttt{SB\_DATABASE\_URL} & \texttt{postgresql+asyncpg://sb\_user:sb\_pass@localhost:5432/sb\_cloud} \\ \hline
+\texttt{SB\_MQTT\_HOST}, \texttt{SB\_MQTT\_PORT}, \texttt{SB\_MQTT\_USERNAME}, \texttt{SB\_MQTT\_PASSWORD} & -- \\ \hline
+\texttt{SB\_TENANT\_ID}, \texttt{SB\_SITE\_ID}, \texttt{SB\_GATEWAY\_ID} & hust, lab01, gw-ubuntu-01 \\ \hline
+\texttt{SB\_API\_HOST}, \texttt{SB\_API\_PORT} & 0.0.0.0, 8000 \\ \hline
+\texttt{SB\_COMMAND\_TIMEOUT\_MS} & 5000 \\ \hline
+\end{tabular}
+\end{table}
+
+Deploy EC2 được thực hiện qua PowerShell: sao chép
+\texttt{deploy/.env.deploy.example} thành
+\texttt{deploy/.env.deploy}, sau đó chạy
+\texttt{deploy/ec2-setup.ps1} và \texttt{deploy/deploy.ps1}. Stack
+production (\texttt{deploy/docker-compose.prod.yml}) gồm ba container:
+\texttt{sb-postgres}, \texttt{sb-mosquitto} (port~1883) và
+\texttt{sb-cloud-api} (port~8000).
+
+% ----------------------------------------
+\subsection{Device State Sync}
+\label{sec:ch3-device-sync}
+
+\texttt{mqtt\_client.py} subscribe topic reported dưới namespace
+\texttt{sb/v1/+/+/+/...}; với mỗi message hợp lệ, module mở một
+session async và upsert bảng \texttt{device\_states} theo
+\texttt{device\_id}. Client REST đọc lại trạng thái qua
+\texttt{GET /api/devices/\{device\_id\}/state}.
+
+% ----------------------------------------
+\subsection{Event History và Logging}
+\label{sec:ch3-event-history}
+
+Event (ví dụ occupancy detected, join/leave) được ghi vào bảng
+\texttt{events} không giới hạn thời gian. API
+\texttt{GET /api/events} hỗ trợ filter theo \texttt{device\_id},
+\texttt{event\_type} và phân trang qua limit/offset. Logging hệ thống
+ở tầng FastAPI dùng cấu hình mặc định của Uvicorn.
+
+% ----------------------------------------
+\subsection{Vấn đề thực tế khi deploy EC2}
+\label{sec:ch3-deploy-issues}
+
+Quá trình deploy từ Windows PowerShell lên Ubuntu EC2 đã gặp và xử lý
+nhiều lỗi đặc thù. CRLF trong here-string PowerShell gây lỗi bash,
+giải pháp là strip ký tự \texttt{\\r} rồi SCP script trước khi thực
+thi. BOM UTF-8 do \texttt{Set-Content -Encoding utf8} tạo ra được xử
+lý bằng \texttt{UTF8Encoding \$false}.
+\texttt{\$ErrorActionPreference = "Stop"} bắt warning
+\texttt{mosquitto\_passwd} thành lỗi, giải pháp là tạm chuyển sang
+Continue và parse EXIT\_CODE. Directive Mosquitto lỗi thời cần cập
+nhật: \texttt{keepalive\_interval} chỉ dùng cho bridge,
+\texttt{message\_size\_limit} đổi thành \texttt{max\_packet\_size}.
+Xung đột port~1883 giữa Mosquitto native systemd và container được xử
+lý bằng \texttt{systemctl stop/disable mosquitto}. Healthcheck cần
+credential (allow\_anonymous false) nên dùng \texttt{mosquitto\_sub
+-u monitor -P monitor123}. ACL monitor phải là
+\texttt{topic read \$SYS/\#}.
+
+
+% ========================================
+% 3.4 FLUTTER MOBILE APP
+% ========================================
+\section{Triển khai Flutter Mobile App}
+\label{sec:ch3-flutter}
+
+Tính năng này chưa được triển khai trong phạm vi dự án. Thư mục
+\texttt{mobile\_app/} hiện chỉ là placeholder và nằm ngoài scope v1.
+
+
+% ========================================
+% 3.5 END-TO-END FLOW
+% ========================================
+\section{Luồng End-to-end Command/State}
+\label{sec:ch3-e2e}
+
+\subsection{Client $\rightarrow$ Cloud $\rightarrow$ Gateway
+  $\rightarrow$ Light}
+\label{sec:ch3-downlink-e2e}
+
+Client gọi \texttt{POST /api/devices/\{device\_id\}/command} với body
+mô tả action (ví dụ on\_off=true). Module \texttt{routers/commands.py}
+validate qua Pydantic, insert bản ghi commands với state accepted,
+sinh \texttt{command\_id} dạng UUID. \texttt{mqtt\_client.py} build
+envelope với \texttt{msg\_id = command\_id}, publish lên topic command
+của gateway dưới namespace
+\texttt{sb/v1/hust/lab01/gw-ubuntu-01/...}.
+
+\texttt{app\_mqtt.c} nhận message, bàn giao cho
+\texttt{cmd\_handler.c}. \texttt{cmd\_handler.c} parse envelope,
+gateway emit reply accepted/queued/sent (cloud cập nhật
+\texttt{commands.state} tương ứng). \texttt{device\_dispatch.c} định
+tuyến theo \texttt{device\_type} trong \texttt{device\_registry}, gọi
+\texttt{light\_ctrl.c} phát ZCL command On/Off tới cluster 0x0006 của
+Light qua NCP. Light nhận ZCL frame, đổi state, trả attribute report.
+\texttt{telemetry\_rx.c} bắt report, publish reported (cập nhật
+\texttt{device\_states}) và gateway emit reply với
+\texttt{executed} mang \texttt{correlation\_id = command\_id}. Cloud
+cập nhật \texttt{commands.state = executed}. Nếu quá
+\texttt{SB\_COMMAND\_TIMEOUT\_MS} mà chưa có executed/failed, worker
+\texttt{command\_timeout.py} chuyển state sang timeout.
+
+Đường đi hoàn chỉnh đã được kiểm chứng qua commit 647b1df
+(``complete downstream command path cloud $\rightarrow$ gateway
+$\rightarrow$ Zigbee light'').
+
+\subsection{Local Automation: Occupancy $\rightarrow$ Light}
+\label{sec:ch3-local-automation}
+
+Kịch bản local automation dựa trên hai cơ chế Zigbee. Thứ nhất là
+Binding APS: Occupancy Sensor (hoặc một rule khởi tạo từ gateway)
+bound với Light qua APS, cho phép trigger On/Off không cần rời mạng
+Zigbee. Thứ hai là gateway lắng nghe phản ánh:
+\texttt{telemetry\_rx.c} bắt attribute report của Light sau khi state
+đổi, publish reported để cloud đồng bộ, dù cloud không phải bên khởi
+lệnh.
+
+Ưu điểm của luồng này là vẫn hoạt động khi mất kết nối Internet vì
+cả chuỗi detect $\rightarrow$ switch on nằm trọn trong mesh Zigbee.
+Module \texttt{rule\_engine.c} dự kiến mở rộng để cho phép định nghĩa
+rule phức tạp hơn ngoài binding thuần.
+
+
+% ========================================
+% 3.6 OTA DIRECTION
+% ========================================
+\section{Hướng phát triển OTA}
+\label{sec:ch3-ota}
+
+OTA được đặc tả chi tiết trong \texttt{docs/OTA\_CAMPAIGN\_CONTRACT.md}.
+Z3Gateway xử lý artifact fetch và ZCL OTA delivery nguyên bản: host
+gateway tải file firmware từ nơi lưu trữ (xem
+\texttt{docs/FIRMWARE\_ARTIFACTS.md}), sau đó phát block theo ZCL OTA
+cluster xuống end device. Firmware binary không bao giờ truyền qua
+payload MQTT; MQTT chỉ mang metadata chiến dịch (campaign id, phiên
+bản, target set), artifact thực tế đi qua HTTP hoặc file store.
+
+Campaign lifecycle diễn ra như sau: cloud khởi tạo chiến dịch, gateway
+báo cáo tiến độ từng thiết bị, cloud tổng hợp trạng thái. Các tài
+liệu liên quan gồm \texttt{docs/FIRMWARE\_ARTIFACTS.md} (nguồn
+artifact) và \texttt{docs/FLASHING.md} (quy trình nạp firmware ban
+đầu). OTA nằm ngoài scope commit hiện tại, được thiết kế sẵn để triển
+khai ở giai đoạn sau mà không phá vỡ contract MQTT \texttt{sb.v1}.
+
+
+\newpage

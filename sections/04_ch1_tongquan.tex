@@ -1,0 +1,736 @@
+% ========================================
+% CHƯƠNG 1: TỔNG QUAN HỆ THỐNG & CƠ SỞ LÝ THUYẾT
+% ========================================
+\chapter{TỔNG QUAN HỆ THỐNG VÀ CƠ SỞ LÝ THUYẾT}
+\label{ch:tongquan}
+
+% ----- TÓM TẮT CHƯƠNG -----
+\vspace{0.5cm}
+\noindent\textit{Chương này trình bày kiến trúc tổng thể của
+hệ thống Smart Home Platform theo mô hình phân tầng, bao gồm
+mạng Zigbee cục bộ, Coordinator/NCP, Z3Gateway host trên Linux,
+broker MQTT trung gian và Cloud Backend trên AWS EC2. Tiếp theo
+là cơ sở lý thuyết về giao thức Zigbee, Zigbee Cluster Library,
+MQTT, giao tiếp UART, phần cứng và kit phát triển, luồng dữ liệu
+end-to-end và đặc tả MQTT Contract.}
+\vspace{0.5cm}
+
+% ========================================
+% 1.1 KIẾN TRÚC HỆ THỐNG
+% ========================================
+\section{Kiến trúc hệ thống}
+\label{sec:ch1-kientruc}
+
+Hệ thống được thiết kế theo mô hình phân tầng gồm bốn lớp chính:
+mạng Zigbee cục bộ hoạt động ở băng tần 2.4~GHz, host gateway
+chạy Linux, broker MQTT trung gian và cloud backend trên AWS~EC2.
+Quyết định kiến trúc quan trọng được đưa ra vào tháng 4/2026 là
+loại bỏ hoàn toàn cầu nối Python MQTT$\leftrightarrow$IPC; ứng dụng
+Z3Gateway viết bằng C nay giao tiếp MQTT trực tiếp, không còn
+Unix socket hay NDJSON IPC.
+
+% Figure placeholder
+\begin{figure}[H]
+    \centering
+    % TODO: Thay bằng hình kiến trúc Smart Home end-to-end
+    % \includegraphics[width=0.9\textwidth]{Images/System_Architecture_SmartHome.png}
+    \caption{Kiến trúc tổng quan hệ thống Smart Home Platform}
+    \label{fig:ch1-architecture}
+\end{figure}
+
+\subsection{Zigbee Network (2.4 GHz)}
+\label{sec:ch1-zigbeenetwork}
+
+Mạng Zigbee trong dự án hoạt động trên băng tần ISM 2.4~GHz theo
+chuẩn IEEE~802.15.4, sử dụng mô hình Centralized Trust Center với
+một Coordinator duy nhất. Các thiết bị đầu cuối gồm Z3Light,
+Z3Switch và Occupancy Sensor gia nhập mạng thông qua cơ chế
+permit-join do gateway điều khiển. Module \texttt{net\_mgr.c/h}
+trong Z3Gateway đảm nhiệm việc form network và mở cửa sổ
+permit-join.
+
+\subsection{Coordinator / NCP (Network Co-Processor)}
+\label{sec:ch1-ncp}
+
+Coordinator được triển khai trên chip Silicon Labs
+EFR32MG12P332F1024GL125 chạy firmware NCP (Network Co-Processor).
+NCP không chạy logic ứng dụng mà chỉ đảm nhiệm lớp radio và lớp
+mạng Zigbee; mọi quyết định ứng dụng được đẩy lên host. Firmware
+NCP được build riêng trong thư mục \texttt{end\_devices/NCP}.
+
+Mô hình NCP khác biệt cơ bản so với mô hình SoC: trong SoC,
+ứng dụng và Zigbee stack chạy chung trên một MCU, phù hợp cho
+thiết bị đơn giản như đèn hay công tắc; còn NCP tách Zigbee stack
+ra chip radio riêng, để host có tài nguyên dồi dào cho MQTT,
+database và tích hợp cloud. Dự án chọn NCP cho Coordinator/gateway
+và SoC cho các end device.
+
+\subsection{Giao tiếp Host -- NCP (EZSP/ASH qua UART)}
+\label{sec:ch1-uartbridge}
+
+Host Z3Gateway trên Linux kết nối với NCP qua UART sử dụng giao
+thức EZSP (EmberZNet Serial Protocol) chạy trên lớp ASH
+(Asynchronous Serial Host). Giao thức này thuộc sở hữu của Silicon
+Labs và được Z3Gateway xử lý nguyên bản, dự án không tái triển khai
+framing UART ở lớp này. Cổng UART được cấu hình trong
+\texttt{app\_config.h} hoặc biến môi trường.
+
+EZSP cho phép host gửi lệnh điều khiển Zigbee stack trên NCP, chẳng
+hạn form network, send ZCL command hay read attribute, đồng thời
+nhận callback và event từ NCP như device joined, attribute report hay
+message received. ASH cung cấp cơ chế ACK, retry, CRC và flow
+control để đảm bảo truyền tin cậy trên UART.
+
+\subsection{Gateway Host (Z3Gateway trên Linux)}
+\label{sec:ch1-gateway}
+
+Gateway là ứng dụng C dựa trên Z3GatewayHost của Silicon Labs,
+build qua \texttt{Z3Gateway.Makefile} từ Simplicity Studio. Các
+module ứng dụng nằm trong
+\texttt{gateway/Z3Gateway/Z3GatewayHost/app/}.
+
+\begin{table}[H]
+\centering
+\caption{Các module chính trong Z3Gateway}
+\label{tab:ch1-gateway-modules}
+\begin{tabular}{|l|p{9cm}|}
+\hline
+\textbf{Module} & \textbf{Vai trò} \\ \hline
+\texttt{app\_mqtt.c/h} & Client MQTT: publish reported/event/reply, subscribe desired/command \\ \hline
+\texttt{cmd\_handler.c/h} & Parse MQTT envelope, dispatch command \\ \hline
+\texttt{device\_registry.c/h} & Bảng thiết bị trong RAM (eui64, nwk\_addr, type) \\ \hline
+\texttt{device\_dispatch.c/h} & Dispatch lệnh theo loại thiết bị \\ \hline
+\texttt{light\_ctrl.c/h} & Điều khiển cluster On/Off (0x0006) \\ \hline
+\texttt{switch\_logic.c/h} & Logic toggle/state của switch \\ \hline
+\texttt{telemetry\_rx.c/h} & ZCL attribute report $\rightarrow$ MQTT reported \\ \hline
+\texttt{device\_monitor.c/h} & Theo dõi presence / last-seen \\ \hline
+\texttt{net\_mgr.c/h} & Form network, permit-join \\ \hline
+\texttt{rule\_engine.c/h, sb\_command.c/h} & Rule evaluation, command helpers \\ \hline
+\end{tabular}
+\end{table}
+
+Kiến trúc runtime là single-process: MQTT client được tích hợp trực
+tiếp trong cùng tiến trình C với EZSP host logic. Gateway đóng vai
+trò bridge duy nhất giữa thế giới IP và mạng Zigbee RF, chuẩn hóa
+dữ liệu từ ZCL sang định dạng JSON qua MQTT.
+
+\subsection{Cloud Backend}
+\label{sec:ch1-cloud}
+
+Cloud backend là một REST API viết bằng FastAPI~0.115 (Python~3.12)
+kết hợp client MQTT và worker timeout chạy nền. Dữ liệu được lưu
+trong PostgreSQL qua SQLAlchemy~2.0 async cùng asyncpg. Môi trường
+production được đóng gói trong
+\texttt{deploy/docker-compose.prod.yml} gồm ba container:
+\texttt{sb-postgres}, \texttt{sb-mosquitto} và \texttt{sb-cloud-api}
+chạy trên EC2.
+
+\subsection{Flutter Mobile App}
+\label{sec:ch1-mobileapp}
+
+Tính năng này chưa được triển khai trong phạm vi dự án. Thư mục
+\texttt{mobile\_app/} hiện chỉ là placeholder, được hoãn sau bản v1.
+
+\subsection{Use Cases theo vai trò}
+\label{sec:ch1-usecases}
+
+Người dùng cuối gọi REST API
+(\texttt{POST /api/devices/\{id\}/command}) để điều khiển đèn. Hệ
+thống cloud publish lệnh MQTT tới gateway, gateway dispatch xuống
+cluster On/Off của thiết bị Zigbee, sau đó nhận phản hồi và cập nhật
+trạng thái ngược về database. Quản trị viên có thể seed dữ liệu mẫu
+qua \texttt{python -m cloud.app.seed} hoặc
+\texttt{deploy/seed-remote.ps1}.
+
+
+% ========================================
+% 1.2 LÝ THUYẾT ZIGBEE
+% ========================================
+\section{Giao thức Zigbee}
+\label{sec:ch1-zigbee}
+
+% ----------------------------------------
+\subsection{Tổng quan}
+\label{sec:ch1-zigbee-overview}
+
+Zigbee là giao thức mạng không dây năng lượng thấp dựa trên
+IEEE~802.15.4, tối ưu cho mesh network mật độ cao trong nhà thông
+minh. Dự án sử dụng Zigbee~3.0 (Z3) thông qua ngăn xếp EmberZNet
+của Silicon Labs. Giao thức hoạt động chủ yếu trên dải tần 2.4~GHz
+với tốc độ 250~kbps, hỗ trợ bảo mật AES-128 bit với Trust Center và
+phù hợp cho các ứng dụng IoT, tự động hóa nhà và công nghiệp.
+
+% ----------------------------------------
+\subsection{Vai trò thiết bị}
+\label{sec:ch1-zigbee-roles}
+
+Mạng có ba vai trò thiết bị. Coordinator là thiết bị duy nhất chạy
+firmware NCP trên EFR32MG12, chịu trách nhiệm khởi tạo và quản lý
+mạng, đóng vai trò Trust Center với địa chỉ luôn là
+\texttt{0x0000}. Router là các thiết bị nguồn lưới như Z3Light và
+Z3Switch, có khả năng relay gói tin và mở rộng phạm vi mạng, luôn
+bật và không sleep. End Device là thiết bị đầu cuối tiết kiệm năng
+lượng như Occupancy Sensor, chỉ giao tiếp qua thiết bị cha và có
+thể sleep.
+
+% ----------------------------------------
+\subsection{Topology mạng}
+\label{sec:ch1-zigbee-topology}
+
+Zigbee hỗ trợ nhiều mô hình mạng khác nhau tùy theo yêu cầu ứng
+dụng.
+
+Mạng hình sao (Star Topology) là mô hình đơn giản nhất với
+Coordinator ở trung tâm và các End Device kết nối trực tiếp. Ưu
+điểm là dễ triển khai, End Device có thể sleep tiết kiệm pin.
+Nhược điểm là phạm vi hạn chế và Coordinator là single point of
+failure.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{Images/Star.png}
+    \caption{Star topology -- Coordinator ở trung tâm}
+    \label{fig:ch1-zigbee-star}
+\end{figure}
+
+Mạng lưới (Mesh Topology) là mô hình mạnh mẽ nhất với Coordinator
+và nhiều Router tạo mạng lưới. Router có thể chuyển tiếp dữ liệu
+multi-hop, tự tìm đường thay thế khi có node lỗi, phù hợp cho hệ
+thống lớn cần độ tin cậy cao.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{Images/Mesh.png}
+    \caption{Mesh topology -- Định tuyến qua nhiều node}
+    \label{fig:ch1-zigbee-mesh}
+\end{figure}
+
+Mạng hình cây (Tree Topology) có cấu trúc phân cấp với Coordinator
+là gốc, Router làm nhánh và End Device là lá. Mô hình này kết hợp
+ưu điểm của Star (đơn giản) và Mesh (mở rộng), thường dùng trong
+các ứng dụng cần phân cấp quản lý rõ ràng.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{Images/Tree.png}
+    \caption{Tree topology -- Cấu trúc phân cấp}
+    \label{fig:ch1-zigbee-tree}
+\end{figure}
+
+Mô hình triển khai thực tế trong dự án là mesh tree: Coordinator ở
+gốc, Router mở rộng vùng phủ, End Device gắn vào Router gần nhất.
+Module \texttt{device\_registry.c} lưu mapping eui64
+$\leftrightarrow$ nwk\_addr $\leftrightarrow$ device\_type để gateway
+định tuyến lệnh xuống đúng thiết bị.
+
+% ----------------------------------------
+\subsection{Kiến trúc Protocol Stack}
+\label{sec:ch1-zigbee-layers}
+
+Kiến trúc Zigbee Protocol Stack được xây dựng dựa trên mô hình
+phân tầng, trong đó mỗi lớp cung cấp dịch vụ cụ thể cho lớp bên
+trên.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{Images/Zigbee_Architecture.png}
+    \caption{Kiến trúc Zigbee Protocol Stack}
+    \label{fig:ch1-zigbee-architecture}
+\end{figure}
+
+Stack gồm PHY/MAC (IEEE~802.15.4) ở tầng thấp nhất, trong đó PHY
+xử lý sóng vô tuyến 2.4~GHz và điều chế tín hiệu, MAC quản lý
+truy cập kênh theo CSMA-CA và kiểm soát khung tin cậy. Tiếp theo
+là lớp NWK (Zigbee Network Layer) do Zigbee định nghĩa, chịu trách
+nhiệm định tuyến AODV qua mạng mesh, quản lý địa chỉ mạng 16-bit
+và xử lý bảo mật mạng bằng Network Key. Lớp APS (Application
+Support Sublayer) đóng vai trò cầu nối giữa NWK và ứng dụng, xử
+lý binding, phân mảnh tin nhắn và lọc gói tin trùng lặp. Trên cùng
+là ZCL (Zigbee Cluster Library), lớp ứng dụng định nghĩa mọi hành
+vi thiết bị. Dự án chỉ can thiệp ở lớp ZCL và APS thông qua các
+module trong \texttt{Z3GatewayHost/app/}.
+
+Bên cạnh các lớp trên là ZDO (Zigbee Device Object) nằm ở
+Endpoint~0, chịu trách nhiệm khởi tạo thiết bị, khám phá mạng và
+quản lý yêu cầu binding. Security Service Provider (SSP) cung cấp
+dịch vụ mã hóa và xác thực cho cả lớp NWK lẫn APS.
+
+% ----------------------------------------
+\subsection{Địa chỉ và Bảo mật}
+\label{sec:ch1-zigbee-addressing}
+
+Mỗi thiết bị có eui64 (64-bit MAC) là định danh vĩnh viễn, được
+dùng làm khóa bền trong payload MQTT. Nwk\_addr (16-bit runtime)
+chỉ dùng cho debug vì nó thay đổi mỗi lần thiết bị rejoin mạng,
+tuyệt đối không được sử dụng làm primary key. Cloud lưu
+\texttt{device\_id} riêng làm khóa logic trong PostgreSQL, tránh
+gắn chặt vào phần cứng và không leak thông tin MAC ra ngoài.
+
+Về bảo mật, mạng sử dụng Network Key 128-bit chia sẻ cho tất cả
+thiết bị trong mạng, Link Key riêng giữa từng cặp thiết bị, và
+Trust Center do Coordinator quản lý để xác thực và phân phối khóa.
+
+% ----------------------------------------
+\subsection{Quá trình hình thành và gia nhập mạng}
+\label{sec:ch1-zigbee-joining}
+
+Gateway gọi \texttt{net\_mgr.c} để form network bằng cách quét
+năng lượng (Energy Scan) chọn kênh vô tuyến ít nhiễu nhất và chọn
+một PAN~ID duy nhất, sau đó mở permit-join trong khoảng thời gian
+cấu hình.
+
+Quá trình End Device gia nhập mạng diễn ra theo bốn giai đoạn.
+Giai đoạn khám phá mạng (Network Discovery): End Device gửi
+Beacon Request, Coordinator trả lời bằng Beacon chứa cờ Association
+Permit = TRUE, End Device chọn Coordinator làm thiết bị cha. Giai
+đoạn kết nối MAC (MAC Association): End Device gửi Association
+Request chứa EUI-64 và Capability Info, Coordinator cấp phát địa
+chỉ mạng 16-bit qua Association Response. Giai đoạn xác thực và
+trao đổi khóa: Coordinator đóng vai trò Trust Center, gửi Transport
+Key chứa Network Key đã mã hóa bằng Link Key ban đầu
+(\texttt{ZigbeeAlliance09} hoặc Install Code), End Device giải mã
+và đạt trạng thái ``Joined and Authenticated''. Giai đoạn thông báo
+và cập nhật bảo mật: End Device phát quảng bá Device\_annce cho
+toàn mạng, sau đó yêu cầu đổi Link Key mới (Trust Center Link Key)
+để thay thế khóa mặc định.
+
+Khi join thành công, thiết bị được đưa vào bảng
+\texttt{device\_registry} và \texttt{telemetry\_rx.c} bắt đầu nhận
+các attribute report.
+
+
+% ========================================
+% 1.3 ZIGBEE CLUSTER LIBRARY (ZCL)
+% ========================================
+\section{Zigbee Cluster Library (ZCL)}
+\label{sec:ch1-zcl}
+
+ZCL là thư viện chuẩn hóa định nghĩa mọi chức năng mà một thiết bị
+Zigbee có thể thực hiện, đóng vai trò như ``cuốn từ điển ngôn ngữ''
+chung đảm bảo tương tác giữa các sản phẩm của nhiều nhà sản xuất.
+
+% ----------------------------------------
+\subsection{Cấu trúc ZCL}
+\label{sec:ch1-zcl-structure}
+
+ZCL chia chức năng thành các cluster định danh bằng ID 16-bit. Mỗi
+cluster đại diện cho một chức năng cụ thể, chứa các attribute lưu
+trữ trạng thái và các command thực hiện hành động. Mỗi cluster chia
+làm hai phía: Server là nơi chứa attribute thực tế và thực thi lệnh
+(ví dụ bóng đèn chứa On/Off Server), Client là nơi gửi lệnh điều
+khiển (ví dụ công tắc chứa On/Off Client).
+
+\begin{table}[H]
+\centering
+\caption{Các cluster chính sử dụng trong dự án}
+\label{tab:ch1-zcl-clusters}
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Cluster ID} & \textbf{Tên} & \textbf{Dùng cho} \\ \hline
+0x0006 & On/Off & Light (bật/tắt) \\ \hline
+(client) & On/Off client + binding & Switch \\ \hline
+0x0406 & Occupancy Sensing & Occupancy Sensor \\ \hline
+\end{tabular}
+\end{table}
+
+Cluster On/Off (0x0006) được \texttt{light\_ctrl.c/h} gọi để bật/tắt
+đèn. Attribute report của cluster này được \texttt{telemetry\_rx.c/h}
+bắt và chuyển thành message MQTT reported.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Images/Client_Server_Model.png}
+    \caption{Mô hình Client/Server trong ZCL}
+    \label{fig:ch1-zcl-client-server}
+\end{figure}
+
+% ----------------------------------------
+\subsection{Binding (Liên kết)}
+\label{sec:ch1-zcl-binding}
+
+Binding là cơ chế APS cho phép thiết bị nguồn (switch) gửi lệnh
+trực tiếp tới thiết bị đích (light) mà không cần qua gateway. Khi
+ứng dụng gửi lệnh qua cluster đã được binding, Zigbee Stack tự tra
+Bảng Binding để điền địa chỉ đích vào gói tin. Đây là nền tảng cho
+luồng local control (xem Mục~\ref{sec:ch1-dataflow-local}), cho phép
+Switch điều khiển Light trực tiếp trong mạng mesh Zigbee với độ trễ
+rất thấp.
+
+% ----------------------------------------
+\subsection{Group (Nhóm)}
+\label{sec:ch1-zcl-group}
+
+Group cho phép nhiều thiết bị cùng nhận một lệnh broadcast cluster
+thông qua một Group~ID 16-bit duy nhất, thay vì gửi nhiều lệnh
+Unicast riêng lẻ. Trong phạm vi hiện tại, chi tiết triển khai group
+chưa nằm trong code gateway, chưa có helper riêng trong
+\texttt{Z3GatewayHost/app/}.
+
+
+% ========================================
+% 1.4 GIAO THỨC MQTT
+% ========================================
+\section{Giao thức MQTT}
+\label{sec:ch1-mqtt}
+
+% ----------------------------------------
+\subsection{Tổng quan}
+\label{sec:ch1-mqtt-overview}
+
+MQTT (Message Queuing Telemetry Transport) là giao thức nhắn tin nhẹ
+theo mô hình Publish/Subscribe, chạy trên TCP, được thiết kế cho
+thiết bị IoT có tài nguyên hạn chế và mạng không ổn định. Dự án
+dùng Mosquitto làm broker cả trong dev lẫn production. Cấu hình
+local nằm ở \texttt{mqtt/docker/}, bridge EC2 ở
+\texttt{mqtt/config/}.
+
+So với HTTP, MQTT có header tối thiểu 2~bytes thay vì hàng trăm
+bytes, duy trì kết nối TCP liên tục không cần handshake mỗi lần
+gửi, hỗ trợ giao tiếp hai chiều cho phép server chủ động đẩy dữ
+liệu xuống client, và có cơ chế QoS cùng LWT để xử lý mất kết
+nối.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=1.0\textwidth]{Images/MQTT_pub-sub.png}
+    \caption{Kiến trúc Publish/Subscribe của MQTT}
+    \label{fig:ch1-mqtt-architecture}
+\end{figure}
+
+% ----------------------------------------
+\subsection{Thành phần chính}
+\label{sec:ch1-mqtt-components}
+
+Gateway (Z3Gateway) và cloud (FastAPI + paho-mqtt) là hai client
+chính. Broker cấu hình bốn principal: \texttt{gateway} có quyền
+readwrite trên toàn topic tree, \texttt{client} có quyền read state
+và write command, \texttt{monitor} có quyền read \texttt{\$SYS/\#}
+cho healthcheck, và \texttt{bridge} dùng để bridge local
+$\leftrightarrow$ EC2. ACL nằm ở \texttt{mqtt/config/acl.conf}.
+
+% ----------------------------------------
+\subsection{Quality of Service (QoS)}
+\label{sec:ch1-mqtt-qos}
+
+QoS xác định mức độ đảm bảo tin nhắn đến được đích.
+
+\begin{table}[H]
+\centering
+\caption{Các mức QoS trong MQTT}
+\label{tab:ch1-mqtt-qos}
+\begin{tabular}{|l|l|p{8cm}|}
+\hline
+\textbf{Mức} & \textbf{Tên} & \textbf{Mô tả} \\
+\hline
+QoS 0 & At most once & Fire-and-forget: gửi một lần, không xác nhận. Có thể mất tin nhưng nhanh nhất. Phù hợp dữ liệu telemetry liên tục. \\
+\hline
+QoS 1 & At least once & Đảm bảo đến đích ít nhất một lần. Gửi lại nếu không nhận ACK. Có thể trùng lặp. Phù hợp lệnh điều khiển. \\
+\hline
+QoS 2 & Exactly once & Chính xác một lần, bắt tay 4 bước (PUBLISH, PUBREC, PUBREL, PUBCOMP). Chậm nhất nhưng không mất, không trùng. \\
+\hline
+\end{tabular}
+\end{table}
+
+QoS được quy định trong \texttt{docs/MQTT\_CONTRACT.md}. Các message
+command/reply quan trọng dùng QoS cao để đảm bảo delivery; telemetry
+định kỳ có thể dùng QoS thấp hơn. QoS áp dụng riêng cho từng chặng
+(Publisher$\rightarrow$Broker và Broker$\rightarrow$Subscriber), mức
+QoS thực tế là min(QoS\_publish, QoS\_subscribe).
+
+% ----------------------------------------
+\subsection{Retained Messages và Last Will}
+\label{sec:ch1-mqtt-retained}
+
+Khi publish với cờ Retain = true, Broker lưu tin nhắn cuối cùng của
+topic. Subscriber mới sẽ nhận ngay tin nhắn này khi đăng ký, không
+cần đợi Publisher gửi lại. Một số topic trạng thái (ví dụ state gần
+nhất của thiết bị) dùng retain để client kết nối sau vẫn nhận được
+trạng thái mới nhất. Chính sách cụ thể được tra cứu trong
+\texttt{docs/MQTT\_CONTRACT.md}.
+
+Last Will and Testament (LWT) cho phép client khai báo một ``di
+chúc'' khi kết nối. Nếu client ngắt kết nối đột ngột, Broker tự
+động publish Will Message, ứng dụng phổ biến là báo trạng thái
+offline của gateway cho hệ thống giám sát.
+
+% ----------------------------------------
+\subsection{Topics và Wildcards}
+\label{sec:ch1-mqtt-topics}
+
+Namespace MQTT của dự án có cấu trúc phân cấp:
+
+\begin{center}
+\texttt{sb/v1/\{tenant\_id\}/\{site\_id\}/\{gateway\_id\}/...}
+\end{center}
+
+Giá trị mặc định trong môi trường phát triển là \texttt{tenant\_id=hust},
+\texttt{site\_id=lab01}, \texttt{gateway\_id=gw-ubuntu-01}. Cloud
+subscribe theo wildcard \texttt{sb/v1/+/+/+/...} để nhận mọi
+gateway.
+
+MQTT hỗ trợ hai loại wildcard khi subscribe: dấu \texttt{+} khớp
+đúng một cấp (single-level) và dấu \texttt{\#} khớp từ~0 đến nhiều
+cấp (multi-level), phải đặt cuối topic.
+
+
+% ========================================
+% 1.5 GIAO TIẾP UART
+% ========================================
+\section{Giao tiếp UART}
+\label{sec:ch1-uart}
+
+% ----------------------------------------
+\subsection{Tổng quan}
+\label{sec:ch1-uart-overview}
+
+UART (Universal Asynchronous Receiver/Transmitter) là kênh vật lý
+giữa host Linux (Z3Gateway) và chip EFR32MG12 chạy firmware NCP.
+Giao thức truyền thông nối tiếp bất đồng bộ này sử dụng hai dây TX
+và RX cho phép full-duplex, kết nối point-to-point, không sử dụng
+clock chung mà hai thiết bị phải thống nhất trước về baud rate.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{Images/UART.png}
+    \caption{Kết nối UART giữa hai thiết bị}
+    \label{fig:ch1-uart-connection}
+\end{figure}
+
+% ----------------------------------------
+\subsection{Frame Format}
+\label{sec:ch1-uart-frame}
+
+Mỗi UART frame gồm Start bit (1~bit), Data bits (thường 8~bit),
+Parity bit (tùy chọn) và Stop bit (1--2~bit). Khung truyền trên
+kênh UART trong dự án tuân thủ ASH (Asynchronous Serial Host), giao
+thức định dạng khung có flag byte, escape byte, CRC và flow control
+do Silicon Labs đặc tả và Z3Gateway xử lý sẵn.
+
+% ----------------------------------------
+\subsection{Ứng dụng UART trong dự án: EZSP/ASH}
+\label{sec:ch1-uart-ezsp}
+
+Payload bên trong frame ASH là các lệnh EZSP (EmberZNet Serial
+Protocol): host gửi command frame (ví dụ ``send ZCL On/Off'') và
+nhận về response/callback frame (ví dụ attribute report từ end
+device). Dự án không tái hiện lớp framing tùy biến, EZSP/ASH được
+Z3Gateway xử lý nguyên bản. File
+\texttt{docs/UART\_FRAME\_FORMAT.md} chỉ còn giữ lại làm tham chiếu
+lịch sử cho cầu nối Python đã bị loại bỏ.
+
+
+% ========================================
+% 1.6 PHẦN CỨNG VÀ KIT
+% ========================================
+\section{Phần cứng và Kit sử dụng}
+\label{sec:ch1-hardware}
+
+% ----------------------------------------
+\subsection{EFR32MG12 2.4 GHz 10 dBm Wireless Starter Kit}
+\label{sec:ch1-hardware-list}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{Images/Kit.png}
+    \caption{EFR32MG12 2.4 GHz 10 dBm Wireless Starter Kit}
+    \label{fig:ch1-Kit}
+\end{figure}
+
+Kit phát triển gồm BRD4001A (Wireless Starter Kit mainboard) và
+BRD4162A (EFR32MG12P332F1024GL125 radio board). Chip cung cấp công
+suất phát 10~dBm ở 2.4~GHz và 1~MB flash đủ cho firmware Zigbee~3.0
+cùng ứng dụng.
+
+Radio Board BRD4162A là bo mạch vô tuyến dạng plug-in, sử dụng SoC
+EFR32MG12 Wireless Gecko hỗ trợ đa giao thức mạng lưới, với cấu
+hình Flash 1024~kB và RAM 256~kB. Khối thu phát vô tuyến hoạt động
+ở băng tần 2.4~GHz với anten tích hợp dạng Inverted-F PCB antenna.
+BRD4162A còn tích hợp 8~Mbit Low-power Serial Flash (MX25R) phục vụ
+lưu trữ dữ liệu hoặc firmware OTA.
+
+Mainboard BRD4001A cung cấp nền tảng cấp nguồn, nạp/gỡ lỗi và
+ngoại vi tương tác. Mainboard tích hợp màn hình LCD Memory
+128$\times$128 pixel, cảm biến Si7021 (I2C), 2~nút nhấn (BTN0,
+BTN1) và 2~LED (LED0, LED1), cùng On-board Debugger (SEGGER J-Link),
+Advanced Energy Monitor (AEM), Packet Trace Interface (PTI) và
+Virtual COM Port (VCOM).
+
+% ----------------------------------------
+\subsection{Cấu hình phần cứng theo thiết bị}
+\label{sec:ch1-hardware-config}
+
+Các firmware end device được build riêng trong thư mục
+\texttt{end\_devices/}. Z3Light là router điều khiển đèn qua cluster
+On/Off 0x0006, LED0 phản ánh trạng thái đèn ON/OFF, sử dụng nguồn
+USB/DC. Z3Switch đóng vai trò router điều khiển/toggle, sử dụng PB0
+để gửi ZCL Toggle Command và PB1 cho Network Steering. Occupancy
+Sensor là Sleepy End Device chạy pin, dùng PB0 để mô phỏng phát hiện
+hiện diện. NCP là firmware Coordinator chạy trên kit nối với gateway
+qua USB J-Link VCOM.
+
+% ----------------------------------------
+\subsection{Toolchain và SDK}
+\label{sec:ch1-hardware-toolchain}
+
+\begin{table}[H]
+\centering
+\caption{Toolchain và SDK version}
+\label{tab:ch1-toolchain}
+\begin{tabular}{|l|l|l|}
+\hline
+ & \textbf{Tên} & \textbf{Version} \\ \hline
+IDE & Simplicity Studio & 5 \\ \hline
+SDK & Gecko SDK & 4.5.0 \\ \hline
+Toolchain & GNU Arm & 12.2.1 \\ \hline
+MCU & EFR32MG12P332F1024GL125 & -- \\ \hline
+Radio Board & BRD4162A & -- \\ \hline
+Mainboard & BRD4001A & -- \\ \hline
+\end{tabular}
+\end{table}
+
+Build chain là Simplicity Studio cùng Gecko SDK của Silicon Labs.
+Gateway host dùng \texttt{Z3Gateway.Makefile} được sinh ra từ
+Simplicity Studio. Config cluster/radio/pin nằm trong
+\texttt{Z3GatewayHost/config/}, code tự sinh ở \texttt{autogen/}.
+
+
+% ========================================
+% 1.7 LUỒNG DỮ LIỆU
+% ========================================
+\section{Luồng dữ liệu (Data Flow)}
+\label{sec:ch1-dataflow}
+
+% ----------------------------------------
+\subsection{Luồng Uplink (State/Event Report)}
+\label{sec:ch1-dataflow-uplink}
+
+% Figure placeholder
+\begin{figure}[H]
+    \centering
+    % TODO: Thay hình uplink flow phù hợp kiến trúc NCP + MQTT
+    % \includegraphics[width=0.9\textwidth]{Images/Up_stream_SmartHome.png}
+    \caption{Luồng dữ liệu Uplink}
+    \label{fig:ch1-uplink}
+\end{figure}
+
+End device gửi attribute report qua ZCL tới NCP, NCP chuyển qua
+EZSP/ASH qua UART lên host. Tại đây \texttt{telemetry\_rx.c} nhận
+và chuẩn hóa dữ liệu, \texttt{app\_mqtt.c} publish lên topic
+reported hoặc event tới broker Mosquitto. Cloud subscribe topic
+tương ứng qua \texttt{cloud/app/mqtt\_client.py}, mở session async
+SQLAlchemy và ghi vào bảng \texttt{device\_states} hoặc
+\texttt{events}.
+
+% ----------------------------------------
+\subsection{Luồng Downlink (Command)}
+\label{sec:ch1-dataflow-downlink}
+
+% Figure placeholder
+\begin{figure}[H]
+    \centering
+    % TODO: Thay hình downlink flow phù hợp kiến trúc NCP + MQTT
+    % \includegraphics[width=0.9\textwidth]{Images/Down_stream_SmartHome.png}
+    \caption{Luồng điều khiển Downlink}
+    \label{fig:ch1-downlink}
+\end{figure}
+
+Người dùng gọi \texttt{POST /api/devices/\{id\}/command}, module
+\texttt{routers/commands.py} tạo bản ghi commands với state
+\texttt{accepted}, \texttt{mqtt\_client.py} publish lên topic command
+của gateway. \texttt{cmd\_handler.c} parse envelope, gọi
+\texttt{device\_dispatch.c} định tuyến theo device type, rồi
+\texttt{light\_ctrl.c} phát ZCL frame xuống NCP. End device thực thi,
+trả attribute report ngược về, gateway emit reply với
+\texttt{correlation\_id = command\_id}. Cloud cập nhật
+\texttt{commands.state} thành \texttt{executed} hoặc \texttt{failed}.
+
+% ----------------------------------------
+\subsection{Luồng Local Control}
+\label{sec:ch1-dataflow-local}
+
+Switch bound trực tiếp với Light qua APS binding: command Zigbee đi
+peer-to-peer trong mạng mesh, gateway chỉ đóng vai trò lắng nghe
+(qua \texttt{telemetry\_rx.c}) để phản ánh trạng thái mới lên cloud.
+Luồng này không phụ thuộc MQTT, giảm latency xuống vài chục
+mili-giây và chịu được mất kết nối internet.
+
+
+% ========================================
+% 1.8 MQTT CONTRACT
+% ========================================
+\section{MQTT Contract}
+\label{sec:ch1-interfaces}
+
+Nguồn sự thật duy nhất cho MQTT contract là file
+\texttt{docs/MQTT\_CONTRACT.md}.
+
+% ----------------------------------------
+\subsection{Namespace và Topic Structure}
+\label{sec:ch1-interfaces-mqtt}
+
+MQTT namespace được thiết kế phân cấp, hỗ trợ multi-tenant và
+multi-site:
+
+\begin{center}
+\texttt{sb/v1/\{tenant\_id\}/\{site\_id\}/\{gateway\_id\}/...}
+\end{center}
+
+Gateway publish các kênh reported, event, reply; subscribe desired
+và command.
+
+\begin{table}[H]
+\centering
+\caption{Các nhóm MQTT topic chính}
+\label{tab:ch1-mqtt-topics}
+\begin{tabular}{|p{6cm}|l|p{4.5cm}|c|}
+\hline
+\textbf{Topic Pattern} & \textbf{Hướng} & \textbf{Mô tả} & \textbf{QoS} \\ \hline
+\texttt{.../gateway/online} & Gw $\rightarrow$ All & Trạng thái online/offline (LWT) & 1 \\ \hline
+\texttt{.../gateway/health} & Gw $\rightarrow$ Cloud & Thông tin sức khỏe gateway & 0 \\ \hline
+\texttt{.../devices/.../reported} & Gw $\rightarrow$ Cloud & Trạng thái thực tế thiết bị & 1 \\ \hline
+\texttt{.../devices/.../desired} & Cloud $\rightarrow$ Gw & Trạng thái mong muốn & 1 \\ \hline
+\texttt{.../devices/.../event} & Gw $\rightarrow$ Cloud & Sự kiện (join, leave, error) & 1 \\ \hline
+\texttt{.../command} & Cloud $\rightarrow$ Gw & Yêu cầu thực thi lệnh & 1 \\ \hline
+\texttt{.../reply} & Gw $\rightarrow$ Cloud & Kết quả thực thi lệnh & 1 \\ \hline
+\end{tabular}
+\end{table}
+
+% ----------------------------------------
+\subsection{Message Envelope}
+\label{sec:ch1-interfaces-envelope}
+
+Mọi message MQTT đều dùng chung envelope:
+
+\begin{lstlisting}[language={}, caption={MQTT message envelope}]
+{
+  "schema": "sb.v1",
+  "msg_id": "uuid",
+  "ts": "ISO8601",
+  "tenant_id": "hust",
+  "site_id": "lab01",
+  "gateway_id": "gw-ubuntu-01",
+  "source": "gateway|cloud",
+  "trace_id": "optional",
+  "correlation_id": "optional",
+  "payload": {}
+}
+\end{lstlisting}
+
+Trường \texttt{schema} cho phép consumer phân biệt và deserialize
+đúng kiểu message. \texttt{msg\_id} là UUID duy nhất cho mỗi
+message, \texttt{ts} là timestamp ISO~8601, \texttt{source} cho biết
+nguồn phát là gateway hay cloud. \texttt{correlation\_id} được set
+bằng \texttt{command\_id} để cloud map reply về đúng lệnh gốc.
+
+% ----------------------------------------
+\subsection{Retain và QoS Policy}
+\label{sec:ch1-interfaces-policy}
+
+Chính sách chi tiết tra cứu trong \texttt{docs/MQTT\_CONTRACT.md}.
+Nguyên tắc chung: state gần nhất có thể retain cho late subscriber;
+command/reply không retain để tránh replay lệnh cũ. Reported state
+dùng QoS~1 và Retain = true, command request/reply dùng QoS~1 và
+Retain = false, gateway online dùng QoS~1 kết hợp Retain = true và
+LWT để tự động báo offline khi gateway mất kết nối.
+
+\newpage

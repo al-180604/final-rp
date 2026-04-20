@@ -1,0 +1,17 @@
+\babel@toc {vietnamese}{}\relax 
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces Kiến trúc tổng quan hệ thống Smart Home Platform}}{11}{figure.caption.12}%
+\contentsline {figure}{\numberline {1.2}{\ignorespaces Star topology -- Coordinator ở trung tâm}}{16}{figure.caption.13}%
+\contentsline {figure}{\numberline {1.3}{\ignorespaces Mesh topology -- Định tuyến qua nhiều node}}{16}{figure.caption.14}%
+\contentsline {figure}{\numberline {1.4}{\ignorespaces Tree topology -- Cấu trúc phân cấp}}{17}{figure.caption.15}%
+\contentsline {figure}{\numberline {1.5}{\ignorespaces Kiến trúc Zigbee Protocol Stack}}{17}{figure.caption.16}%
+\contentsline {figure}{\numberline {1.6}{\ignorespaces Mô hình Client/Server trong ZCL}}{20}{figure.caption.17}%
+\contentsline {figure}{\numberline {1.7}{\ignorespaces Kiến trúc Publish/Subscribe của MQTT}}{21}{figure.caption.18}%
+\contentsline {figure}{\numberline {1.8}{\ignorespaces Kết nối UART giữa hai thiết bị}}{23}{figure.caption.20}%
+\contentsline {figure}{\numberline {1.9}{\ignorespaces EFR32MG12 2.4 GHz 10 dBm Wireless Starter Kit}}{24}{figure.caption.21}%
+\contentsline {figure}{\numberline {1.10}{\ignorespaces Luồng dữ liệu Uplink}}{26}{figure.caption.23}%
+\contentsline {figure}{\numberline {1.11}{\ignorespaces Luồng điều khiển Downlink}}{26}{figure.caption.24}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }

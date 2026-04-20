@@ -1,0 +1,71 @@
+% ========================================
+% CHƯƠNG 5: KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN
+% ========================================
+\chapter{KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN}
+\label{ch:ketluan}
+
+% ----- TÓM TẮT CHƯƠNG -----
+\vspace{0.5cm}
+\noindent\textit{Chương này tổng kết mức độ hoàn thành các mục tiêu đề ra, đánh giá đóng góp của đồ án, phân tích các hạn chế và đề xuất hướng phát triển tiếp theo.}
+\vspace{0.5cm}
+
+% ========================================
+\section{Kết luận}
+\label{sec:ch5-ketluan}
+
+(Viết tổng kết thành quả đạt được cho dự án smart home:)
+
+\begin{itemize}
+    \item \textbf{Xây dựng mạng Zigbee hoạt động ổn định:} (Viết: mạng Zigbee 3.0 với 4 device types, firmware module hóa.)
+    \item \textbf{Thiết kế giao thức truyền thông UART-MQTT:} (Viết: UART bridge, MQTT topics, CID/ACK/Retry, Rules Engine, LWT.)
+    \item \textbf{Tích hợp Cloud Firebase:} (Viết: device state sync, command relay, event history.)
+    \item \textbf{Phát triển Flutter Mobile App:} (Viết: light control, occupancy monitoring, realtime updates.)
+    \item \textbf{Kiến trúc IoT end-to-end có thể tái sử dụng:} (Viết: kiến trúc từ firmware đến app, tách biệt rõ ràng, dễ mở rộng.)
+\end{itemize}
+
+% ========================================
+\section{Hạn chế}
+\label{sec:ch5-hanche}
+
+\begin{itemize}
+    \item \textbf{Quy mô thử nghiệm nhỏ:} Kết quả được thu thập với số node hạn chế trong phạm vi phòng. Chưa có dữ liệu về hiệu năng khi mở rộng lên nhiều node hoặc môi trường có nhiều vật cản.
+    
+    \item \textbf{Bảo mật chưa đầy đủ:} Hệ thống hiện tại chỉ có bảo mật mạng Zigbee. Giao tiếp MQTT có thể chưa mã hóa TLS đầy đủ. Flutter App cần bổ sung xác thực mạnh hơn.
+    
+    \item \textbf{Chưa có lưu trữ dữ liệu dài hạn chuyên dụng:} Event history lưu trong Firebase nhưng chưa có chính sách retention và analytics chuyên sâu.
+    
+    \item \textbf{Điểm lỗi đơn:} Coordinator là điểm duy nhất kết nối mạng Zigbee với Gateway. Nếu Coordinator hoặc Gateway gặp sự cố, hệ thống ngừng hoạt động.
+    
+    \item \textbf{Local automation hạn chế:} Chưa có rule engine phía Coordinator/Gateway cho automation phức tạp (ví dụ: occupancy $\rightarrow$ bật đèn tự động với điều kiện thời gian).
+\end{itemize}
+
+% ========================================
+\section{Hướng phát triển}
+\label{sec:ch5-huongphattrien}
+
+\begin{itemize}
+    \item \textbf{Chuẩn hóa kiến trúc Gateway theo hướng Z3Gateway / NCP-host:}
+    Phân tách rõ Coordinator (quản lý mạng Zigbee) và Gateway host (chuyển tiếp, logic, API). Migrate từ SoC Coordinator sang NCP model để Gateway có khả năng xử lý mạnh hơn.
+
+    \item \textbf{Migrate Gateway sang Raspberry Pi:}
+    Chuyển Gateway service từ Ubuntu laptop sang Raspberry Pi để tiến tới embedded gateway triển khai thực tế.
+
+    \item \textbf{Tăng cường bảo mật:}
+    MQTT TLS (port 8883), xác thực mạnh cho Firebase/App, phân quyền theo vai trò, audit log.
+
+    \item \textbf{OTA (Over-The-Air firmware update):}
+    Triển khai Gecko Bootloader + GBL file cho Zigbee OTA. Quản lý OTA campaign từ Cloud.
+
+    \item \textbf{Local automation engine:}
+    Xây dựng rule engine tại Gateway/Coordinator cho automation không phụ thuộc cloud (occupancy $\rightarrow$ light, schedule-based control).
+
+    \item \textbf{Cảnh báo và thông báo:}
+    Push notification qua Firebase Cloud Messaging khi có sự kiện: occupancy detected, device offline, gateway disconnect.
+
+    \item \textbf{Mô hình nhiều nhà (multi-home):}
+    Mỗi nhà một Gateway; Cloud Firebase quản lý tập trung nhiều home. User có thể quản lý nhiều nhà từ một app.
+
+    \item \textbf{Mở rộng device types:}
+    Thêm dimmer (Level Control Cluster), temperature sensor, door/window sensor, smart plug.
+\end{itemize}
+

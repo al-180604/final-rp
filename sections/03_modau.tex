@@ -1,0 +1,58 @@
+% ========================================
+% MỞ ĐẦU (không đánh số chương)
+% ========================================
+\chapter*{MỞ ĐẦU}
+\addcontentsline{toc}{chapter}{MỞ ĐẦU}
+\label{ch:modau}
+
+% ========================================
+\section*{1. Bối cảnh và vấn đề}
+\addcontentsline{toc}{section}{\numberline {} Bối cảnh và vấn đề}
+\label{sec:modau-boicanh}
+
+Trong bối cảnh smart home (nhà thông minh) và smart building (tòa nhà thông minh) ngày càng phổ biến, nhu cầu xây dựng hệ thống IoT hoàn chỉnh từ tầng thiết bị đến ứng dụng di động trở thành một bài toán có giá trị cả về mặt kỹ thuật lẫn thực tiễn. Các giải pháp hiện có trên thị trường thường là hệ sinh thái đóng, khó tùy biến và mở rộng. Việc nghiên cứu và xây dựng một nền tảng mở, dựa trên các chuẩn giao tiếp phổ biến như Zigbee và MQTT, cho phép kiểm soát toàn bộ luồng dữ liệu từ thiết bị đến người dùng.
+
+Zigbee được lựa chọn cho tầng local network bởi giao thức này phù hợp với mô hình nhiều thiết bị nhỏ gọn, tiết kiệm năng lượng, hỗ trợ mesh network giúp tăng phạm vi phủ sóng và độ tin cậy. Zigbee đã được ứng dụng rộng rãi trong smart home với các thiết bị chiếu sáng, công tắc, cảm biến hiện diện (occupancy sensor) và nhiều loại thiết bị khác.
+
+% ========================================
+\section*{2. Mục tiêu và phạm vi}
+\addcontentsline{toc}{section}{\numberline {} Mục tiêu và phạm vi}
+\label{sec:modau-muctieu}
+
+Đề tài hướng tới xây dựng một nền tảng smart home mini-platform dựa trên kiến trúc IoT nhiều lớp, bao gồm:
+
+\begin{itemize}
+    \item \textbf{Local network:} Mạng Zigbee kết nối các thiết bị: đèn thông minh (light device), công tắc (switch device), cảm biến hiện diện (occupancy sensor), được điều phối bởi Zigbee Coordinator.
+    \item \textbf{Gateway:} Chạy trên Linux (Ubuntu, hướng migrate sang Raspberry Pi), đóng vai trò bridge giữa mạng Zigbee và cloud thông qua UART và MQTT.
+    \item \textbf{Cloud:} Sử dụng Firebase cho backend, quản lý device state, command dispatch, event history.
+    \item \textbf{Mobile App:} Ứng dụng Flutter hiển thị trạng thái thiết bị, điều khiển bật/tắt đèn, xem occupancy state, nhận cập nhật realtime.
+\end{itemize}
+
+Phạm vi triển khai tập trung vào kiểm chứng luồng dữ liệu end-to-end: App gửi command $\rightarrow$ Cloud nhận $\rightarrow$ Gateway dịch sang Zigbee command $\rightarrow$ Light Device thực thi $\rightarrow$ State report quay lại Cloud và App.
+
+% ========================================
+\section*{3. Deliverables}
+\addcontentsline{toc}{section}{\numberline {} Deliverables}
+\label{sec:modau-deliverables}
+
+\begin{enumerate}
+    \item Firmware cho 4 node Zigbee: Coordinator, Light Device, Switch Device, Occupancy Sensor.
+    \item Gateway service chạy trên Ubuntu (Python), bridge UART $\leftrightarrow$ MQTT.
+    \item Cloud backend trên Firebase (Realtime DB / Firestore, Cloud Functions).
+    \item Ứng dụng di động Flutter với chức năng điều khiển đèn và giám sát occupancy.
+    \item Tài liệu kỹ thuật: đặc tả giao thức, MQTT topics, kiến trúc hệ thống.
+\end{enumerate}
+
+% ========================================
+\section*{4. Cấu trúc báo cáo}
+\addcontentsline{toc}{section}{\numberline {} Cấu trúc báo cáo}
+\label{sec:modau-cautruc}
+
+Báo cáo được tổ chức thành 5 chương:
+
+\begin{itemize}
+    \item \textbf{Chương 1 -- Tổng quan hệ thống và cơ sở lý thuyết:} Trình bày kiến trúc hệ thống, các thành phần, phần cứng sử dụng, và nền tảng lý thuyết Zigbee, ZCL, MQTT, UART.
+   
+\end{itemize}
+
+\newpage

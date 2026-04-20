@@ -1,0 +1,21 @@
+\babel@toc {vietnamese}{}\relax 
+\contentsline {table}{\numberline {2}{\ignorespaces Bảng phân chia công việc}}{8}{table.caption.10}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {1.1}{\ignorespaces Các mức QoS trong MQTT}}{22}{table.caption.19}%
+\contentsline {table}{\numberline {1.2}{\ignorespaces Toolchain và SDK version}}{26}{table.caption.22}%
+\contentsline {table}{\numberline {1.3}{\ignorespaces Các nhóm MQTT topic chính}}{28}{table.caption.25}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {2.1}{\ignorespaces Thiết kế Zigbee Device Roles}}{31}{table.caption.26}%
+\contentsline {table}{\numberline {2.2}{\ignorespaces Thiết kế các kênh MQTT}}{32}{table.caption.27}%
+\contentsline {table}{\numberline {2.3}{\ignorespaces Các bảng database chính}}{36}{table.caption.28}%
+\contentsline {table}{\numberline {2.4}{\ignorespaces REST API endpoints chính}}{36}{table.caption.29}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {3.1}{\ignorespaces Coordinator Firmware -- Ánh xạ module}}{38}{table.caption.30}%
+\contentsline {table}{\numberline {3.2}{\ignorespaces Light Device Firmware -- Cấu trúc}}{39}{table.caption.31}%
+\contentsline {table}{\numberline {3.3}{\ignorespaces Switch Device Firmware -- Cấu trúc}}{39}{table.caption.32}%
+\contentsline {table}{\numberline {3.4}{\ignorespaces Occupancy Sensor Firmware -- Cấu trúc}}{39}{table.caption.33}%
+\contentsline {table}{\numberline {3.5}{\ignorespaces Công cụ và phiên bản sử dụng}}{40}{table.caption.34}%
+\contentsline {table}{\numberline {3.6}{\ignorespaces Tham số Timeout và Retry}}{41}{table.caption.35}%
+\contentsline {table}{\numberline {3.7}{\ignorespaces Admin API Endpoints}}{42}{table.caption.36}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }

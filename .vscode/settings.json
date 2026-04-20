@@ -1,0 +1,94 @@
+{
+    // ===== OUTPUT =====
+    "latex-workshop.latex.outDir": "./build",
+
+    // ===== AUTO BUILD =====
+    // Tự động build khi save (Ctrl+S) hoặc khi thay đổi file
+    "latex-workshop.latex.autoBuild.run": "onSave",
+    "latex-workshop.latex.autoBuild.interval": 300,
+    "latex-workshop.latex.watch.delay": 150,
+
+    // ===== PDF VIEWER =====
+    "latex-workshop.view.pdf.viewer": "tab",
+
+    // ===== SYNCTEX - QUAN TRỌNG =====
+    // Ctrl+Click trên PDF → nhảy vào source code
+    "latex-workshop.view.pdf.internal.synctex.keybinding": "ctrl-click",
+    "latex-workshop.synctex.afterBuild.enabled": true,
+    // Đường dẫn synctex (tự động tìm trong outDir)
+    "latex-workshop.synctex.path": "synctex",
+    // Cho phép forward search (source → PDF) sau khi build
+    "latex-workshop.synctex.synctexjs.enabled": true,
+
+    // ===== RECIPES =====
+    "latex-workshop.latex.recipe.default": "first",
+    "latex-workshop.latex.recipes": [
+        {
+            "name": "pdflatex x2 (TOC + SyncTeX)",
+            "tools": [
+                "pdflatex",
+                "pdflatex"
+            ]
+        },
+        {
+            "name": "pdflatex x1 (fast)",
+            "tools": [
+                "pdflatex"
+            ]
+        },
+        {
+            "name": "latexmk (smart build)",
+            "tools": [
+                "latexmk"
+            ]
+        }
+    ],
+    "latex-workshop.latex.tools": [
+        {
+            "name": "pdflatex",
+            "command": "pdflatex",
+            "args": [
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-file-line-error",
+                "-output-directory=%OUTDIR%",
+                "%DOC%"
+            ],
+            "env": {}
+        },
+        {
+            "name": "latexmk",
+            "command": "latexmk",
+            "args": [
+                "-pdf",
+                "-synctex=1",
+                "-interaction=nonstopmode",
+                "-file-line-error",
+                "-outdir=%OUTDIR%",
+                "%DOC%"
+            ],
+            "env": {}
+        }
+    ],
+
+    // ===== CLEAN =====
+    "latex-workshop.latex.autoClean.run": "never",
+
+    // ===== PERFORMANCE =====
+    "latex-workshop.intellisense.package.enabled": false,
+    "latex-workshop.hover.preview.enabled": false,
+
+    // ===== MESSAGES =====
+    "latex-workshop.message.error.show": true,
+    "latex-workshop.message.warning.show": false,
+
+    // ===== FORMATTER =====
+    "latex-workshop.formatting.latex": "latexindent",
+    "latex-workshop.formatting.latexindent.path": "latexindent",
+    "latex-workshop.formatting.latexindent.args": [
+        "-c",
+        "%DIR%/build/",
+        "%TMPFILE%",
+        "-y=defaultIndent: '  '"
+    ]
+}

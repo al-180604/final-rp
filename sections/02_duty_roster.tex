@@ -1,0 +1,42 @@
+% ========================================
+% PHÂN CHIA CÔNG VIỆC - DUTY ROSTER
+% ========================================
+\begin{center}
+{\Large\bfseries PHÂN CHIA CÔNG VIỆC}
+\end{center}
+\phantomsection \addcontentsline{toc}{chapter}{PHÂN CHIA CÔNG VIỆC}
+\label{sec:duty-roster}
+
+\begin{table}[H]
+\centering
+\small
+\begin{tabular}{|c|p{9.5cm}|c|}
+\hline
+\textbf{STT} & \textbf{Công việc} & \textbf{Sinh viên thực hiện} \\ \hline
+\multicolumn{3}{|l|}{\textbf{Firmware -- Zigbee Devices}} \\ \hline
+1 & <Firmware Coordinator: tạo mạng, Trust Center, ZCL, UART bridge> & <SV> \\ \hline
+2 & <Firmware Light Device: On/Off Server, LED indicator, state report> & <SV> \\ \hline
+3 & <Firmware Switch Device: On/Off Client, binding, button control> & <SV> \\ \hline
+4 & <Firmware Occupancy Sensor: occupancy detection, ZCL report> & <SV> \\ \hline
+\multicolumn{3}{|l|}{\textbf{Gateway Service (Ubuntu / Raspberry Pi)}} \\ \hline
+5 & <Gateway UART module: kết nối COM, đọc line, reconnect> & <SV> \\ \hline
+6 & <Gateway MQTT bridge: subscribe cmd, publish state/telemetry/ack> & <SV> \\ \hline
+7 & <Gateway rules engine, ACK routing, retry/timeout> & <SV> \\ \hline
+8 & <Gateway Admin API (/health, /status, /config, /rules)> & <SV> \\ \hline
+\multicolumn{3}{|l|}{\textbf{Cloud -- Firebase}} \\ \hline
+9 & <Firebase setup: Realtime DB / Firestore schema, Cloud Functions> & <SV> \\ \hline
+10 & <MQTT -- Firebase bridge: device state sync, command relay> & <SV> \\ \hline
+11 & <Event history, logging, device management trên cloud> & <SV> \\ \hline
+\multicolumn{3}{|l|}{\textbf{Mobile App -- Flutter}} \\ \hline
+12 & <Flutter app: device list, light on/off control UI> & <SV> \\ \hline
+13 & <Flutter app: occupancy state display, realtime update> & <SV> \\ \hline
+14 & <Flutter app: event history, notification> & <SV> \\ \hline
+\multicolumn{3}{|l|}{\textbf{Tổng hợp \& Tài liệu}} \\ \hline
+15 & <Tổng hợp và hoàn thiện báo cáo> & <SV 1, SV 2> \\ \hline
+\end{tabular}
+\caption{Bảng phân chia công việc}
+\label{tab:duty-roster}
+\end{table}
+
+\vspace{0.3cm}
+\newpage
