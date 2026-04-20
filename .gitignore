@@ -1,5 +1,6 @@
 # === LaTeX build artifacts ===
 build/
+!build/main.pdf
 *.aux
 *.log
 *.out
