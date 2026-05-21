@@ -1,633 +1,829 @@
-Được. Mình sẽ viết phần **context dự án** theo kiểu bạn có thể lấy gần như nguyên văn để đưa vào **Chương 1 – Tổng quan đề tài** và làm khung cho toàn bộ báo cáo.
+# CONTEXT.md - Zigbee BLE Orchestration Platform
 
-Mình sẽ không viết theo kiểu lý thuyết chung chung, mà theo đúng **scope hiện tại của đồ án**:
-**smart home / smart building mini-platform** gồm **Zigbee local network**, **gateway trên Linux rồi chuyển sang Raspberry Pi**, **cloud**, **mobile app Flutter**, và có hướng mở rộng **OTA**.
+Cập nhật: 2026-05-21
 
----
+File này là context nền để chuẩn bị viết báo cáo đồ án tốt nghiệp. Nội dung được tổng hợp từ repo thật tại `D:\CODE\zigbee-ble-orchestration-platform`, ưu tiên trạng thái source hiện tại hơn các tài liệu lịch sử.
 
-# 1) Context tổng quát của dự án
+## 0. Tóm tắt 1 phút
 
-## 1.1 Bối cảnh bài toán
+Dự án hiện tại là một nền tảng Smart Building mini dùng Zigbee để quản lý thiết bị trong nhà/phòng lab. Người dùng thao tác trên Flutter mobile app; app gọi Cloud REST API; Cloud lưu dữ liệu và publish command qua MQTT; Gateway C nhận MQTT, chuyển thành Zigbee command qua EFR32 NCP; Zigbee end devices báo trạng thái ngược lại về Gateway, MQTT, Cloud, rồi hiển thị lại trên app.
 
-Trong các hệ thống **smart home** và **smart building**, nhu cầu không chỉ là gắn thêm vài thiết bị thông minh, mà là xây được một hệ thống có thể:
+Luồng tổng thể:
 
-* kết nối nhiều **node** không dây trong nhà,
-* giám sát trạng thái thiết bị theo thời gian thực,
-* điều khiển thiết bị từ xa qua app,
-* chạy một phần **automation** ngay tại local để không phụ thuộc hoàn toàn vào Internet,
-* và có khả năng mở rộng sau này như **OTA**, **scene**, **event log**, **health monitoring**.
+```text
+Flutter Mobile App
+  -> FastAPI Cloud REST API
+  -> Mosquitto MQTT Broker
+  -> Native Z3Gateway C Host App
+  -> EFR32 NCP
+  -> Zigbee End Devices
+```
 
-Bài toán cốt lõi của dự án này không phải chỉ là “bật tắt đèn”, mà là xây một kiến trúc **end-to-end** hoàn chỉnh:
-**device → coordinator → gateway → cloud → mobile app → command quay ngược về device**.
+Điểm cần nhấn mạnh trong báo cáo: kiến trúc hiện tại không còn dùng Python MQTT-to-IPC bridge cũ. Gateway hiện là `Z3Gateway C single-process` tích hợp MQTT trực tiếp.
 
-Đây là loại bài toán rất phù hợp để làm đồ án tốt nghiệp vì nó chạm vào cả:
+Tên repo có `BLE`, nhưng qua source hiện tại chưa thấy module BLE chính thức trong runtime chính. Trọng tâm đồ án đang là Zigbee Smart Building.
 
-* **embedded firmware**
-* **wireless network**
-* **gateway software**
-* **cloud integration**
-* **mobile app**
-* **system design**
+## 1. Nguồn đã kiểm tra
 
----
+Các file chính đã dùng làm bằng chứng:
 
-# 2) Vì sao dự án chọn Zigbee làm local network
+- `README.md`: overview, module chính, tính năng MVP, lệnh run/deploy.
+- `cloud/README.md`: Cloud stack, API, local run, deploy, environment variables.
+- `cloud/app/main.py`: FastAPI app, routers, MQTT lifecycle, timeout worker.
+- `cloud/app/models.py`: database models: Home, Room, User, Device, DeviceState, Event, Command, Automation.
+- `cloud/app/routers/*.py`: API hiện có cho devices, commands, events, automations, gateways, health.
+- `mobile_app/pubspec.yaml`: Flutter dependencies.
+- `mobile_app/lib/`: UI features, repositories, view models.
+- `gateway/Z3GatewayHost/app/`: native C gateway logic: MQTT, command handling, discovery, dispatch, network manager, light control.
+- `mqtt/docker/docker-compose.yml`: local Mosquitto service.
+- `deploy/docker-compose.prod.yml`: production services: Mosquitto, Postgres, Cloud API.
+- `docs/MQTT_CONTRACT.md`: MQTT topic tree, envelope, QoS/retain, command lifecycle.
+- `docs/DEVICE_CAPABILITY_MATRIX.md`: official v1 device types and capabilities.
+- `docs/ADAPTER_ACTION_MAP.md`: MQTT to Z3Gateway C action mapping.
+- `docs/OTA_CAMPAIGN_CONTRACT.md`: planned OTA contract.
+- `docs/FLASHING.md` and `docs/FIRMWARE_ARTIFACTS.md`: firmware flashing and binary artifacts.
+- `docs/iot_zigbee_sprint_plan.md`: historical roadmap; useful for future feature ideas, but some older architecture details are deprecated.
 
-## 2.1 Bối cảnh công nghệ
+## 2. Giải thích sơ bộ theo hướng báo cáo
 
-Trong nhà thông minh, lớp local network cần một giao thức có các đặc điểm:
+Đề tài có thể được mô tả là:
 
-* tiêu thụ điện năng thấp,
-* phù hợp cho cảm biến chạy pin,
-* hỗ trợ nhiều node,
-* hỗ trợ **mesh network** để mở rộng vùng phủ,
-* có mô hình thiết bị chuẩn như light, switch, sensor,
-* có hệ sinh thái công nghiệp đủ mạnh để làm project nghiêm túc.
+> Xây dựng nền tảng quản lý thiết bị Smart Building sử dụng Zigbee, gồm mobile app, cloud backend, MQTT broker, gateway native C và firmware cho thiết bị EFR32. Hệ thống hỗ trợ giám sát trạng thái thiết bị, điều khiển đèn từ xa, theo dõi command lifecycle, lưu event history và quản lý automation rule cơ bản. Nền tảng được thiết kế để có thể mở rộng lên OTA firmware update, MQTT over TLS, credential management, group/scene control và realtime push.
 
-Zigbee phù hợp với kiểu bài toán này vì nó được thiết kế cho hệ thống nhiều thiết bị truyền dữ liệu nhỏ, có hỗ trợ **mesh** và phù hợp với các use case như smart home, smart building và automation phân tán.
+Nói ngắn gọn cho chương 1:
 
-## 2.2 Ý nghĩa của việc chọn Zigbee trong đồ án
+- Bài toán: quản lý thiết bị IoT nội bộ theo hướng đáng tin cậy, mở rộng được, có cloud và app.
+- Giải pháp: dùng Zigbee cho local mesh network, MQTT cho message backbone, FastAPI cho cloud API, Flutter cho app.
+- Giá trị kỹ thuật: có đủ data flow end-to-end từ mobile tới firmware và ngược lại.
+- Giá trị thực tiễn: có thể áp dụng cho phòng lab, lớp học, nhà thông minh hoặc mô hình Smart Building nhỏ.
 
-Việc chọn Zigbee giúp dự án có giá trị kỹ thuật ở 3 mức:
+## 3. Thuật ngữ mới theo 3 mức độ
 
-### Mức 1 — Thiết bị
+### 3.1 Tech Stack
 
-Node có thể là:
+Mức 5 tuổi:
 
-* **light**
-* **switch**
-* **occupancy sensor**
-* sau này có thể thêm **lock**, **curtain**, **temperature sensor**
+Tech Stack giống như bộ đồ nghề để xây một ngôi nhà. Mỗi món đồ nghề làm một việc khác nhau.
 
-### Mức 2 — Mạng
+Mức cấp 2:
 
-Hệ thống không còn là point-to-point đơn giản, mà là một **Zigbee network** với:
+Tech Stack là tập hợp ngôn ngữ, framework, database, tool và môi trường chạy mà dự án dùng để xây hệ thống.
 
-* **Coordinator**
-* **Router**
-* **End Device**
+Mức sinh viên năm nhất:
 
-### Mức 3 — Hệ thống
+Tech Stack của dự án này gồm nhiều lớp: Flutter/Dart cho mobile, FastAPI/Python cho backend, PostgreSQL cho database, Mosquitto/MQTT cho message broker, C/Silicon Labs SDK cho gateway/firmware, Docker/PowerShell cho deploy.
 
-Zigbee không đứng một mình, mà là local layer trong kiến trúc lớn hơn có **gateway**, **MQTT/HTTP**, **cloud** và **mobile app**.
+Sau phần này, báo cáo có thể dùng thẳng từ `Tech Stack`.
 
----
+### 3.2 Gateway
 
-# 3) Context của phần Zigbee local network
+Mức 5 tuổi:
 
-## 3.1 Vai trò của Zigbee network trong dự án
+Gateway giống như người phiên dịch giữa app và thiết bị đèn/cảm biến.
 
-Phần **local network** là nền tảng vật lý và logic gần thiết bị nhất. Đây là nơi diễn ra:
+Mức cấp 2:
 
-* đo đạc trạng thái từ sensor,
-* truyền lệnh điều khiển tới actuator,
-* liên kết giữa switch và light,
-* event sensing như occupied / unoccupied,
-* và khả năng fallback local khi cloud bị mất kết nối.
+Gateway là máy trung gian nhận lệnh từ Cloud qua MQTT, rồi chuyển lệnh đó sang Zigbee để thiết bị thật hiểu được.
 
-Nói đơn giản:
-**đây là lớp “hệ thần kinh tại chỗ” của ngôi nhà thông minh.**
+Mức sinh viên năm nhất:
 
-## 3.2 Các loại node chính trong dự án
+Trong dự án này, Gateway là native `Z3Gateway C host app`. Nó chạy trên Linux host, nói chuyện với MQTT broker, dùng EFR32 NCP làm Zigbee radio, xử lý command dispatch, device discovery, telemetry và local rule handling.
 
-### Light node
+### 3.3 MQTT
 
-Đây là **actuator** chính của dự án.
-Nó nhận lệnh **On/Off** từ network và đổi trạng thái đèn thật hoặc module điều khiển đèn.
+Mức 5 tuổi:
 
-### Switch node
+MQTT giống như hộp thư. Ai có tin thì bỏ vào đúng hộp, ai cần thì lấy ra.
 
-Đây là **input device** cục bộ.
-Vai trò của nó là gửi lệnh điều khiển light ngay trong local network, không cần cloud.
+Mức cấp 2:
 
-### Occupancy sensor node
+MQTT là giao thức publish/subscribe. Cloud, Gateway và các service không cần gọi trực tiếp nhau, mà gửi message qua broker.
 
-Đây là **sensor node** để nhận biết có người / không có người trong khu vực.
-Trong Zigbee chuẩn, bài toán này bám theo **Occupancy Sensing cluster** với cluster ID **0x0406**, dùng để cấu hình và báo trạng thái occupancy.
+Mức sinh viên năm nhất:
 
-Nếu cảm biến dùng PIR, Zigbee ZCL còn có sẵn các thuộc tính như:
+Trong dự án này, MQTT là message backbone giữa Cloud và Gateway. Topic tree dùng dạng `sb/v1/{tenant}/{site}/{gateway}/...`, mọi message dùng JSON envelope chung, command reply có lifecycle `accepted -> queued -> sent -> executed | failed | timeout`.
 
-* `PIROccupiedToUnoccupiedDelay`
-* `PIRUnoccupiedToOccupiedDelay`
-* `PIRUnoccupiedToOccupiedThreshold`
-  để chỉnh độ trễ và ngưỡng chuyển trạng thái occupied/unoccupied.
+### 3.4 OTA
 
-## 3.3 Vai trò các loại thiết bị trong mạng Zigbee
+Mức 5 tuổi:
 
-Trong dự án này, cần hiểu rõ 3 vai trò:
+OTA giống như gửi bản cập nhật mới cho thiết bị mà không cần cắm dây.
 
-### Coordinator
+Mức cấp 2:
 
-* tạo mạng Zigbee,
-* chọn PAN,
-* cho thiết bị join,
-* quản lý bảo mật như **Trust Center**,
-* và làm đầu mối giao tiếp ra ngoài hệ thống.
-  Trong thực tế, một mạng Zigbee chỉ có **một Coordinator**.
+OTA là cơ chế cập nhật firmware từ xa. Cloud gửi thông tin bản firmware, Gateway tải file, kiểm tra checksum, rồi đưa bản cập nhật cho thiết bị Zigbee.
 
-### Router
+Mức sinh viên năm nhất:
 
-* mở rộng vùng phủ,
-* chuyển tiếp gói tin,
-* phù hợp với node luôn có nguồn như light module.
+Theo `docs/OTA_CAMPAIGN_CONTRACT.md`, OTA trong dự án được thiết kế theo hướng metadata-over-MQTT, binary-over-HTTP: Cloud publish campaign manifest và desired state qua MQTT; Gateway tải `.ota` artifact bằng HTTP, verify `sha256` và `size_bytes`, lưu vào `SB_OTA_DIR`, rồi dùng native Zigbee OTA behavior để offer firmware cho thiết bị.
 
-### End Device
+### 3.5 Security
 
-* là các node cuối như sensor/switch,
-* không định tuyến,
-* có thể ngủ để tiết kiệm pin,
-* phù hợp với cảm biến dùng pin.
+Mức 5 tuổi:
 
-## 3.4 Binding, endpoint, cluster trong context dự án
+Security là khóa cửa để người lạ không tự ý điều khiển thiết bị.
 
-Đây là phần rất nên viết vào báo cáo vì nó thể hiện bạn hiểu Zigbee ở mức hệ thống chứ không chỉ nạp firmware mẫu.
+Mức cấp 2:
 
-### Endpoint
+Security trong IoT cần bảo vệ app, API, MQTT broker, Gateway, Zigbee network và firmware update.
 
-Mỗi thiết bị có thể có nhiều **endpoint**, mỗi endpoint đại diện cho một chức năng ứng dụng.
+Mức sinh viên năm nhất:
 
-### Cluster
+Trong dự án hiện tại, security đã có một số nền tảng: MQTT có username/password, Mosquitto ACL/config, Zigbee network dùng network creator security/permit join, Cloud config tách qua environment variables. Các phần nên làm tiếp là backend auth router, bearer token thực sự, MQTT over TLS, credential rotation, OTA artifact signing, audit log và production secret management.
 
-Mỗi endpoint có thể chứa nhiều **cluster**, ví dụ:
+## 4. Tech Stack hiện tại
 
-* **On/Off cluster** cho light
-* **Occupancy Sensing cluster** cho motion/PIR
-* sau này có thể thêm **Level Control**, **Electrical Measurement**, v.v.
+| Lớp | Công nghệ | Bằng chứng trong repo | Vai trò |
+|---|---|---|---|
+| Mobile App | Flutter, Dart | `mobile_app/pubspec.yaml` | Giao diện người dùng, gọi REST API, hiển thị thiết bị/log/automation |
+| Mobile State Management | Provider | `provider: ^6.1.5+1` | Quản lý view model, theme, locale, auth, device dashboard |
+| Mobile HTTP | `http: ^1.6.0` | `mobile_app/pubspec.yaml` | Gọi Cloud REST API |
+| Backend API | FastAPI 0.115.6 | `cloud/requirements.txt` | REST API cho app |
+| Backend ORM | SQLAlchemy 2.0.36, asyncpg | `cloud/requirements.txt` | Kết nối PostgreSQL async |
+| Database | PostgreSQL 16 | `deploy/docker-compose.prod.yml` | Lưu devices, states, events, commands, automations |
+| MQTT Client | Paho MQTT 2.1.0 | `cloud/requirements.txt` | Cloud subscribe/publish MQTT |
+| MQTT Broker | Eclipse Mosquitto 2.0 | `mqtt/docker/docker-compose.yml` | Broker cho Cloud/Gateway |
+| Gateway | C, Silicon Labs Z3Gateway Host | `gateway/Z3GatewayHost/app/` | Chuyển MQTT command thành Zigbee action |
+| Zigbee Radio | EFR32 NCP | `docs/FLASHING.md` | Coordinator radio qua UART/ASH/EZSP |
+| Firmware | Silicon Labs Gecko SDK 4.5.0 | `docs/FIRMWARE_ARTIFACTS.md` | Build/flash NCP, Z3Light, Z3Switch |
+| Local/Prod Runtime | Docker Compose | `mqtt/docker/docker-compose.yml`, `deploy/docker-compose.prod.yml` | Chạy Mosquitto, Postgres, Cloud API |
+| Backend Test | pytest | `cloud/tests/pytest.ini`, `cloud/tests/*.py` | Unit/integration tests cho Cloud |
+| Mobile Test | flutter_test | `mobile_app/test/*.dart` | Widget/view model/repository tests |
 
-### Binding
+## 5. Cấu trúc thư mục nên đưa vào báo cáo
 
-**Binding** là liên kết logic giữa thiết bị nguồn và thiết bị đích.
-Ví dụ: switch endpoint 1 cluster On/Off được bind tới light endpoint 1 cluster On/Off.
-Sau khi bind, switch có thể gửi lệnh đến light theo quan hệ logic thay vì phải hardcode địa chỉ tĩnh.
+| Thư mục | Ý nghĩa |
+|---|---|
+| `mobile_app/` | Flutter app để monitor device, điều khiển light và quản lý automation rule |
+| `cloud/` | FastAPI backend, MQTT client, command tracking, events và automation API |
+| `gateway/` | Native Z3Gateway C host app, xử lý MQTT, Zigbee command dispatch, telemetry và local rule |
+| `mqtt/` | Mosquitto config, ACL, password files, local broker compose |
+| `database/` | PostgreSQL schema |
+| `deploy/` | EC2 deployment scripts và production Docker Compose |
+| `end_devices/` | Silicon Labs end-device firmware projects |
+| `artifact/` | Firmware binaries và manifest để flash board |
+| `docs/` | Contracts, design notes, implementation plans, user guide |
 
-Trong context dự án, binding rất quan trọng vì:
+## 6. Tính năng hiện có
 
-* nó giảm phụ thuộc vào địa chỉ mạng thay đổi,
-* phù hợp cho local control,
-* và là cơ chế “smart home đúng chất Zigbee”, không phải tự chế toàn bộ từ đầu.
+### 6.1 Device monitoring
 
----
+App có thể hiển thị danh sách thiết bị và trạng thái thiết bị qua Cloud API.
 
-# 4) Context của phần Gateway
+API liên quan:
 
-## 4.1 Vì sao cần Gateway
+- `GET /api/devices/`
+- `GET /api/devices/{device_id}`
+- `GET /api/devices/{device_id}/state`
 
-Zigbee không phải giao thức IP, nên các node Zigbee không thể trực tiếp nói chuyện với Internet hay mobile app.
-Vì vậy cần một **gateway** để đóng vai trò **bridge** giữa thế giới Zigbee và thế giới IP/cloud.
-Gateway chính là lớp “biên dịch” giữa:
+Database liên quan:
 
-* Zigbee frames / ZCL commands
-* và MQTT / HTTP / app commands.
+- `Device`
+- `DeviceState`
+- `Event`
 
-## 4.2 Kiến trúc Gateway trong dự án này
+Theo capability matrix v1, device types chính thức là:
 
-Dự án của bạn đang đi theo hướng rất hợp lý:
+- `light`
+- `switch`
+- `motion`
 
-### Phase 1
+Các trạng thái chính:
 
-* **Linux laptop** làm gateway host
+- `light`: `power`, `level`, `reachable`
+- `switch`: `reachable`, optional `battery`
+- `motion`: `occupancy`, `reachable`, optional `battery`
 
-### Phase 2
+### 6.2 Light control
 
-* chuyển sang **Raspberry Pi**
+Người dùng có thể gửi lệnh bật/tắt đèn từ app.
 
-### Zigbee side
+Downlink flow:
 
-* dùng **EFR32MG12** ở vai trò radio/coordinator/NCP
+```text
+Mobile App
+  -> POST /api/devices/{device_id}/command
+  -> Cloud tạo Command
+  -> Cloud publish MQTT commands/{command_id}/request
+  -> Z3Gateway C nhận MQTT
+  -> resolve device_id thành nodeId/endpoint
+  -> gửi Zigbee On/Off command qua EFR32 NCP
+  -> thiết bị light thực thi
+```
 
-### Host side
+Gateway code liên quan:
 
-* chạy **gateway application**
-* nhận dữ liệu từ Zigbee side
-* bridge lên cloud
-* nhận command từ app/cloud và gửi xuống node
+- `gateway/Z3GatewayHost/app/app_mqtt.c`
+- `gateway/Z3GatewayHost/app/cmd_handler.c`
+- `gateway/Z3GatewayHost/app/device_dispatch.c`
+- `gateway/Z3GatewayHost/app/light_ctrl.c`
 
-Đây đúng với mô hình **NCP (Network Co-Processor)**:
+### 6.3 Command lifecycle
 
-* radio board xử lý phần Zigbee stack,
-* host xử lý application logic, cloud integration và extensibility.
-  Mô hình này thường dùng **EZSP** giữa NCP và host, và **Z3Gateway** của Silicon Labs là một ví dụ host app chạy trên Linux với giao diện MQTT.
+MQTT contract định nghĩa command reply lifecycle:
 
-## 4.3 Vai trò thực tế của Gateway trong đồ án
+```text
+accepted -> queued -> sent -> executed | failed | timeout
+```
 
-Trong dự án này, gateway không chỉ là “cầu nối truyền dữ liệu”.
-Nó còn là nơi hợp lý nhất để đặt:
+Ý nghĩa khi viết báo cáo:
 
-* **device registry**
-* **state normalization**
-* **rule engine**
-* **event log**
-* **health monitoring**
-* **offline fallback logic**
-* **OTA coordination**
+- Không chỉ gửi lệnh một chiều.
+- Hệ thống có cơ chế quan sát trạng thái lệnh.
+- Cloud có thể hiển thị command pending/success/failure/timeout cho app.
 
-### Ví dụ
+API liên quan:
 
-Khi cảm biến occupancy báo `occupied`, gateway có thể:
+- `GET /api/commands/{command_id}`
 
-1. nhận event,
-2. chạy rule,
-3. gửi lệnh bật light,
-4. ghi log,
-5. đồng bộ state lên cloud,
-6. để app thấy trạng thái mới.
+Backend code liên quan:
 
-Nghĩa là gateway là **trục xương sống** của toàn bộ hệ.
+- `cloud/app/routers/commands.py`
+- `cloud/app/command_timeout.py`
+- `cloud/tests/test_commands.py`
+- `cloud/tests/test_timeout.py`
 
----
+### 6.4 Event history
 
-# 5) Context của UART bridge và interface contracts
+Cloud lưu event để app xem lịch sử.
 
-## 5.1 Vì sao UART bridge quan trọng
+API:
 
-Trong dự án, giữa **Coordinator/NCP** và **Gateway host** cần một lớp giao tiếp ổn định, dễ debug, dễ log.
-Bạn đang đi theo hướng dùng **UART/USB serial**, đây là hướng rất thực tế cho lab và cho giai đoạn prototype.
+- `GET /api/events/`
 
-## 5.2 Ý nghĩa của UART contract
+Event có thể đến từ:
 
-Một đồ án kiểu này rất dễ fail nếu không chốt sớm **contract** giữa firmware và gateway.
+- device state report,
+- gateway lifecycle event,
+- automation/device events,
+- permit join events.
 
-Project mẫu bạn đang bám có pattern rõ:
+### 6.5 Automation rule management
 
-* `@DATA`
-* `@CMD`
-* `@ACK`
-* frame format: `@PREFIX {JSON}\r\n`
-* UART `115200 8N1 CRLF`
+Automation hiện đã có cả Cloud API và Flutter UI.
 
-Về mặt kỹ thuật, ý nghĩa là:
+Cloud API:
 
-* `@DATA`: node/coordinator gửi telemetry hoặc state đi lên
-* `@CMD`: gateway gửi lệnh điều khiển đi xuống
-* `@ACK`: coordinator trả kết quả thực thi lệnh
+- `GET /api/automations`
+- `GET /api/automations/{automation_id}`
+- `POST /api/automations`
+- `PUT /api/automations/{automation_id}`
+- `POST /api/automations/{automation_id}/enable`
+- `POST /api/automations/{automation_id}/disable`
+- `DELETE /api/automations/{automation_id}`
 
-Đây là điểm rất đáng viết trong báo cáo vì nó cho thấy bạn không chỉ làm thiết bị, mà còn biết **interface design**.
+Database model:
 
-## 5.3 Vì sao contract phải freeze sớm
+- `Automation`
+- fields quan trọng: `name`, `enabled`, `tenant_id`, `site_id`, `gateway_id`, `version`, `trigger`, `actions`, `sync_status`, `last_run_status`, `last_error`
 
-Nếu `UART contract`, `MQTT topics`, `state enums` thay đổi liên tục:
+Mobile UI liên quan:
 
-* firmware và gateway sẽ lệch nhau,
-* dashboard/app hiển thị sai,
-* integration sẽ rất tốn thời gian debug.
+- `mobile_app/lib/ui/features/automation/views/automation_rules_view.dart`
+- `mobile_app/lib/ui/features/automation/view_models/automation_view_model.dart`
+- `mobile_app/lib/ui/features/automation/widgets/*`
 
-Đây là lý do trong planning nội bộ, team cần freeze contract từ sớm rồi mới mở rộng payload theo node mới.
+Ý nghĩa trong báo cáo:
 
----
+- Người dùng có thể tạo rule kiểu "when this happens, do that".
+- Cloud lưu và đồng bộ rule.
+- Gateway execution là trách nhiệm device-side/gateway-side.
+- Đây là nền tảng để mở rộng local automation sau này.
 
-# 6) Context của MQTT / cloud layer
+### 6.6 Gateway commissioning và device rediscovery
 
-## 6.1 Vai trò của cloud layer
+Gateway API hỗ trợ mở/đóng mạng Zigbee để join thiết bị và rediscover thiết bị.
 
-Cloud trong dự án này không nên được hiểu đơn thuần là “nơi lưu dữ liệu”.
-Nó có 4 vai trò chính:
+API:
 
-* đồng bộ **current state**
-* lưu **event history**
-* làm nơi nhận/gửi **command** từ app
-* hỗ trợ mở rộng như **notification**, **OTA campaign**, **analytics**
+- `POST /api/gateways/{gateway_id}/commissioning/open`
+- `POST /api/gateways/{gateway_id}/commissioning/close`
+- `POST /api/devices/{device_id}/rediscover`
 
-## 6.2 Vai trò của MQTT
+Gateway code liên quan:
 
-MQTT rất phù hợp ở lớp gateway–cloud vì:
+- `gateway/Z3GatewayHost/app/net_mgr.c`
+- `gateway/Z3GatewayHost/app/device_discovery.c`
+- `gateway/Z3GatewayHost/app/device_registry.c`
 
-* nhẹ,
-* hỗ trợ **pub/sub**,
-* tách producer và consumer,
-* hợp với telemetry và command kiểu IoT.
+Trong `net_mgr.c`, Gateway dùng Silicon Labs network creator security để mở/đóng permit join và publish event như `permit_join_opened`, `permit_join_closed`, `permit_join_failed`.
 
-Trong kiến trúc hiện tại, gateway publish state/telemetry lên broker và subscribe command topic để nhận lệnh điều khiển.
-Trong sample report, topic pattern kiểu:
+### 6.7 Firmware artifacts và flashing
 
-* `.../state`
-* `.../telemetry`
-* `.../cmd/...`
-* `.../ack`
-* `.../status/gateway`
-  đã thể hiện đúng mô hình này.
+Repo có tài liệu firmware rõ:
 
-## 6.3 Context cloud riêng cho dự án của bạn
+- `artifact/bootloader-uart-xmodem/`
+- `artifact/ncp-uart-hw/`
+- `artifact/Z3Switch/`
+- `artifact/Z3Light/`
 
-Với scope hiện tại, phần cloud nên được mô tả như sau:
+Theo `docs/FIRMWARE_ARTIFACTS.md`:
 
-### Chức năng nền
+- Bootloader binary: ready
+- NCP binary: ready
+- Z3Switch binary: not built
+- Z3Light binary: not built
 
-* user/device/home/room organization
-* command dispatch
-* state synchronization
-* event persistence
+Lệnh flash mẫu:
 
-### Chức năng nâng cao
+```bash
+commander flash artifact/ncp-uart-hw/ncp-uart-hw.s37 --device EFR32MG12P332F1024GL125
+```
 
-* OTA campaign management
-* dashboard analytics
-* notification
-* device health / audit
+## 7. Data flow nên vẽ trong báo cáo
 
-Nếu bạn dùng **Firebase**, thì trong báo cáo nên mô tả cloud như một lớp:
+### 7.1 Downlink: app điều khiển thiết bị
 
-* lưu **desired state**
-* lưu **reported state**
-* lưu **history**
-* làm backend cho mobile app
+```text
+User tap "On" in Flutter App
+  -> RemoteDeviceRepository gọi Cloud REST API
+  -> FastAPI tạo Command trong DB
+  -> MQTTService publish command request
+  -> Mosquitto broker route message
+  -> Z3Gateway C subscribe topic
+  -> cmd_handler parse payload
+  -> device_dispatch resolve target
+  -> light_ctrl gửi Zigbee command
+  -> Light node đổi trạng thái
+```
 
-Không nhất thiết phải mô tả Firebase quá chi tiết ở chương context; phần đó nên để sang chương thiết kế.
+### 7.2 Uplink: thiết bị báo trạng thái
 
----
+```text
+Zigbee device reports attribute
+  -> EFR32 NCP nhận Zigbee frame
+  -> Z3Gateway C callback xử lý report
+  -> Gateway publish devices/{type}/{id}/reported
+  -> Mosquitto broker route message
+  -> Cloud MQTT client subscribe
+  -> Cloud upsert DeviceState/Event
+  -> Mobile App polling REST API
+  -> UI hiển thị trạng thái mới
+```
 
-# 7) Context của mobile app
+### 7.3 Automation flow
 
-## 7.1 Vai trò của mobile app trong hệ thống
+```text
+User creates rule in Flutter App
+  -> POST /api/automations
+  -> Cloud validates trigger/actions
+  -> Cloud stores Automation row
+  -> Cloud publishes automation rule to MQTT
+  -> Gateway receives synced rule
+  -> Gateway/device-side logic executes when trigger occurs
+  -> Cloud/App observe sync_status, last_run_status, event history
+```
 
-Mobile app không phải là nơi xử lý logic mạng Zigbee.
-Vai trò đúng của app là:
+### 7.4 OTA planned flow
 
-* giao diện cho người dùng cuối,
-* quan sát trạng thái thiết bị theo thời gian thực,
-* gửi command điều khiển,
-* cấu hình rule / scene / mode,
-* nhận thông báo và xem event log.
+```text
+Cloud creates OTA campaign manifest
+  -> MQTT manifest topic
+  -> Z3Gateway C downloads .ota artifact via HTTP
+  -> Gateway verifies sha256 and size_bytes
+  -> Gateway stores artifact under SB_OTA_DIR
+  -> Cloud sends desired action stage_and_offer
+  -> Gateway offers firmware through Zigbee OTA
+  -> Gateway publishes progress/event topics
+```
 
-## 7.2 Ý nghĩa khi chọn Flutter
+Quan trọng: firmware binary không đi qua MQTT; MQTT chỉ mang metadata/control/progress.
 
-Chọn **Flutter** giúp dự án có tính thực dụng cao vì:
+## 8. API hiện tại
 
-* nhanh dựng MVP,
-* UI tốt,
-* dễ demo,
-* dễ nối cloud/backend.
+| Nhóm | Method | Endpoint | Vai trò |
+|---|---:|---|---|
+| Health | GET | `/health` | Kiểm tra Cloud API sống |
+| Devices | GET | `/api/devices/` | Lấy danh sách thiết bị |
+| Devices | GET | `/api/devices/{device_id}` | Lấy chi tiết thiết bị |
+| Devices | GET | `/api/devices/{device_id}/state` | Lấy state mới nhất |
+| Commands | POST | `/api/devices/{device_id}/command` | Gửi lệnh điều khiển thiết bị |
+| Commands | GET | `/api/commands/{command_id}` | Kiểm tra trạng thái command |
+| Events | GET | `/api/events/` | Lấy lịch sử event |
+| Automations | GET | `/api/automations` | Lấy danh sách rule |
+| Automations | POST | `/api/automations` | Tạo rule |
+| Automations | PUT | `/api/automations/{automation_id}` | Sửa rule |
+| Automations | POST | `/api/automations/{automation_id}/enable` | Bật rule |
+| Automations | POST | `/api/automations/{automation_id}/disable` | Tắt rule |
+| Automations | DELETE | `/api/automations/{automation_id}` | Xóa rule |
+| Gateways | POST | `/api/gateways/{gateway_id}/commissioning/open` | Mở permit join |
+| Gateways | POST | `/api/gateways/{gateway_id}/commissioning/close` | Đóng permit join |
+| Gateways | POST | `/api/devices/{device_id}/rediscover` | Rediscover thiết bị |
 
-Trong bối cảnh đồ án, app là lớp chứng minh rằng hệ thống không chỉ chạy ở mức firmware, mà đã trở thành một **user-facing system**.
+Lưu ý: mobile có `RemoteAuthRepository` gọi `/auth/login` và `/auth/logout`, nhưng source có TODO nói Cloud backend chưa expose auth router. Vì vậy auth nên đưa vào phần "sắp làm", không mô tả như tính năng hoàn chỉnh.
 
-## 7.3 App nên được mô tả như gì trong báo cáo
+## 9. Database context
 
-Bạn nên mô tả app như **presentation layer** của hệ thống, với 3 màn hình cốt lõi:
+Các entity chính:
 
-* **device list / room view**
-* **device detail + control**
-* **event/history/health**
+| Entity | Bảng | Ý nghĩa |
+|---|---|---|
+| `Home` | `homes` | Nhà/khu vực quản lý |
+| `Room` | `rooms` | Phòng thuộc home |
+| `User` | `users` | Người dùng, hiện có username và home_id |
+| `Device` | `devices` | Thiết bị logic như `light-01`, có `device_type`, `eui64`, `room_id`, online status |
+| `DeviceState` | `device_states` | State JSON được báo cáo từ thiết bị |
+| `Event` | `events` | Lịch sử sự kiện |
+| `Command` | `commands` | Lệnh điều khiển và status |
+| `Automation` | `automations` | Rule automation, trigger/actions JSON, sync/run status |
 
-Như vậy báo cáo sẽ rõ vai trò kiến trúc hơn là chỉ kể “có app để bấm nút”.
+Điểm hay để viết báo cáo: database không cố hard-code mọi state thành nhiều cột, mà dùng JSON cho `state`, `payload`, `target`, `trigger`, `actions`. Cách này giúp dễ mở rộng device/capability nhưng cần contract rõ để tránh dữ liệu lộn xộn.
 
----
+## 10. MQTT contract context
 
-# 8) Context của OTA
+Envelope chung:
 
-## 8.1 Vì sao OTA là phần quan trọng
+```json
+{
+  "schema": "sb.v1",
+  "msg_id": "...",
+  "ts": 1773990000000,
+  "tenant_id": "hust",
+  "site_id": "lab01",
+  "gateway_id": "gw-ubuntu-01",
+  "source": "gateway",
+  "trace_id": "trace-01",
+  "correlation_id": "cmd_01",
+  "payload": {}
+}
+```
 
-Một hệ thống smart home thực tế không dừng ở việc chạy firmware bản đầu tiên.
-Khi số lượng thiết bị tăng, việc cập nhật thủ công từng node sẽ rất khó vận hành.
-Vì vậy **OTA (Over-The-Air update)** là một hướng mở rộng có giá trị thực tế rất cao.
+Required fields:
 
-Trong Zigbee, OTA thường do **coordinator/gateway** đóng vai trò **OTA Server**, lưu file `.ota` và phân phối cho các thiết bị khi client yêu cầu.
+- `schema`
+- `msg_id`
+- `ts`
+- `tenant_id`
+- `site_id`
+- `gateway_id`
+- `source`
+- `payload`
 
-## 8.2 Context OTA trong dự án này
+Optional fields:
 
-Với đồ án của bạn, OTA nên được mô tả theo hướng:
+- `trace_id`
+- `correlation_id`
 
-### Cloud
+Topic groups quan trọng:
 
-* quản lý campaign
-* quyết định thiết bị nào cần update
-* cấp metadata/version/artifact
+- `gateway/health`
+- `gateway/log`
+- `gateway/event`
+- `devices/{device_type}/{device_id}/registry`
+- `devices/{device_type}/{device_id}/reported`
+- `devices/{device_type}/{device_id}/desired`
+- `devices/{device_type}/{device_id}/telemetry`
+- `devices/{device_type}/{device_id}/event`
+- `commands/{command_id}/request`
+- `commands/{command_id}/reply`
+- `ota/campaigns/{campaign_id}/manifest`
+- `ota/devices/{device_id}/desired`
+- `ota/devices/{device_id}/progress`
+- `ota/devices/{device_id}/event`
 
-### Gateway
+Retain/QoS ý nghĩa:
 
-* lưu image OTA tại local
-* serve image cho Zigbee nodes
-* theo dõi tiến độ update
+- State/latest snapshot nên retain để consumer mới vào vẫn thấy trạng thái gần nhất.
+- Telemetry tần suất cao không nhất thiết retain.
+- Command reply không retain.
+- Command lifecycle giúp debug được lệnh đang ở bước nào.
 
-### Device
+## 11. Kiểm thử hiện có
 
-* check version
-* tải block
-* verify
-* reboot vào bootloader
-* chạy firmware mới
+### 11.1 Backend tests
 
-Zigbee OTA client/server có flow chuẩn gồm:
+Cloud có pytest tests:
 
-* query image,
-* image block transfer,
-* upgrade end,
-* apply image,
-* rejoin network sau update.
+- `cloud/tests/test_automations.py`
+- `cloud/tests/test_automation_e2e.py`
+- `cloud/tests/test_commands.py`
+- `cloud/tests/test_devices.py`
+- `cloud/tests/test_gateways.py`
+- `cloud/tests/test_mqtt_client.py`
+- `cloud/tests/test_mqtt_gateway_events.py`
+- `cloud/tests/test_schemas.py`
+- `cloud/tests/test_timeout.py`
 
-## 8.3 Ý nghĩa của OTA trong báo cáo
+Lệnh chạy:
 
-Ngay cả khi phiên bản hiện tại chưa hoàn thiện OTA full, bạn vẫn nên để nó trong **context và hướng phát triển**, vì điều đó cho thấy kiến trúc của bạn đã được thiết kế để **scale** và **bảo trì được trong thực tế**.
+```powershell
+pytest cloud/tests -q
+```
 
----
+Hoặc theo `cloud/README.md`:
 
-# 9) Context của security
+```powershell
+pytest cloud/tests/ -v
+```
 
-## 9.1 Vì sao security phải có trong context
+Ý nghĩa khi viết báo cáo:
 
-Với smart home, nếu chỉ nói điều khiển đèn/cảm biến mà không nhắc đến **security**, báo cáo sẽ bị thiếu chiều sâu hệ thống.
+- Có unit/integration coverage cho API, schemas, MQTT client, timeout worker, gateway events và automation.
+- Test dùng sqlite in-memory cho nhiều case nên không nhất thiết cần Postgres/MQTT thật.
+- Smoke test cần Postgres + Mosquitto + API chạy.
 
-## 9.2 Những điểm security nên nhắc
+### 11.2 Mobile tests
 
-### Local Zigbee side
+Mobile có Flutter tests:
 
-* **Trust Center**
-* **Network Key**
-* **Link Key**
-* join policy
-* bảo mật khi thiết bị tham gia mạng
+- `mobile_app/test/auth_gate_bypass_test.dart`
+- `mobile_app/test/auth_view_model_test.dart`
+- `mobile_app/test/automation_view_model_test.dart`
+- `mobile_app/test/login_view_test.dart`
+- `mobile_app/test/mobile_error_handling_test.dart`
+- `mobile_app/test/remote_auth_repository_test.dart`
+- `mobile_app/test/remote_automation_repository_test.dart`
+- `mobile_app/test/remote_device_repository_test.dart`
+- `mobile_app/test/widget_test.dart`
 
-Trong Zigbee centralized security, Coordinator thường đóng vai trò **Trust Center**, chịu trách nhiệm quản lý khóa và kiểm soát thiết bị được gia nhập mạng hay không.
+Lệnh chạy:
 
-### Cloud side
+```powershell
+cd mobile_app
+flutter test
+```
 
-* authentication
-* authorization
-* secure transport
-* không hardcode secrets
+### 11.3 Manual/E2E checks nên mô tả
 
-### Gateway side
+Các kịch bản nên đưa vào báo cáo kiểm thử:
 
-* lưu config/secrets an toàn
-* kiểm soát reconnect
-* tránh gửi command trùng lặp
-* log sự kiện quan trọng
+1. Start Mosquitto local.
+2. Start Cloud API.
+3. Seed sample data.
+4. Mở mobile app với API thật.
+5. Xem danh sách devices.
+6. Gửi light on/off command.
+7. Kiểm tra command status.
+8. Kiểm tra event history.
+9. Tạo automation rule.
+10. Enable/disable/delete automation rule.
+11. Mở permit join và kiểm tra gateway event.
+12. Flash firmware bằng Commander nếu có hardware.
 
-Ở chương context, chỉ cần nói đủ để người đọc hiểu rằng đây không phải một demo “bật đèn cho vui”, mà là một hệ có ý thức về vận hành thật.
+## 12. Cách build/run local
 
----
+### 12.1 Start MQTT broker
 
-# 10) Context của data flow
+```powershell
+cd D:\CODE\zigbee-ble-orchestration-platform\mqtt\docker
+docker compose up -d
+```
 
-Đây là phần rất đáng viết vì nó là xương sống logic.
+Mosquitto local expose:
 
-## 10.1 Uplink flow
+- MQTT: `1883`
+- WebSocket: `9001`
 
-Luồng dữ liệu đi lên:
+### 12.2 Run Cloud API
 
-**occupancy/light state → coordinator/NCP → gateway → MQTT/cloud → app**
+```powershell
+cd D:\CODE\zigbee-ble-orchestration-platform
+pip install -r cloud\requirements.txt
+python -m cloud.app.seed
+python -m cloud
+```
 
-Ý nghĩa:
+Cloud API default:
 
-* lấy trạng thái thật từ local network
-* chuẩn hóa và đồng bộ lên lớp cloud
-* app nhìn thấy theo thời gian thực
+- `http://localhost:8000`
+- health check: `http://localhost:8000/health`
 
-## 10.2 Downlink flow
+### 12.3 Run Flutter app
 
-Luồng điều khiển đi xuống:
+```powershell
+cd D:\CODE\zigbee-ble-orchestration-platform\mobile_app
+flutter run --dart-define=USE_MOCK_API=false --dart-define=API_BASE_URL=http://localhost:8000
+```
 
-**app → cloud → gateway → coordinator/NCP → light**
+Nếu chạy Android emulator và API nằm trên host machine:
 
-Ý nghĩa:
+```powershell
+flutter run --dart-define=USE_MOCK_API=false --dart-define=API_BASE_URL=http://10.0.2.2:8000
+```
 
-* command xuất phát từ user
-* gateway translate và dispatch
-* device thực thi
-* kết quả quay ngược về bằng **ACK/state report**
+### 12.4 Deploy production
 
-Project mẫu đã mô tả rất rõ command path:
-dashboard publish command → gateway subscribe → gateway tạo `@CMD` → coordinator gửi Zigbee command → device thực thi → coordinator tạo `@ACK` → gateway publish lại để dashboard biết thành công/thất bại.
+Theo README:
 
-## 10.3 Ý nghĩa học thuật
+```powershell
+Copy-Item deploy\.env.deploy.example deploy\.env.deploy
+powershell -ExecutionPolicy Bypass -File deploy\deploy.ps1
+```
 
-Phần này cho phép bạn phân tích trong báo cáo:
+Production compose có:
 
-* latency
-* reliability
-* retry/timeout
-* consistency giữa UI và trạng thái thật
-* trade-off giữa local automation và cloud control
+- `sb-mosquitto`
+- `sb-postgres`
+- `sb-cloud-api`
 
----
+Ports:
 
-# 11) Context về phạm vi và ràng buộc của đồ án
+- API: `8000`
+- MQTT: `1883`
+- MQTT WebSocket: `9001`
+- PostgreSQL: `5432`
 
-Đây là phần rất quan trọng, vì nếu không viết rõ phạm vi thì hội đồng dễ hỏi theo hướng “sao chưa có cái này, sao chưa có cái kia”.
+## 13. Các tính năng sắp làm / roadmap
 
-## 11.1 Phạm vi nên chốt
+Phần này nên viết rõ là "planned/future work", không viết như đã hoàn thành.
 
-Phiên bản hiện tại tập trung vào:
+### 13.1 OTA firmware update
 
-* local network Zigbee cho **light / switch / occupancy**
-* gateway trên **Linux laptop**
-* cloud integration
-* app Flutter để monitor/control
-* end-to-end command và state flow
-* hướng mở rộng OTA
+Nguồn: `docs/OTA_CAMPAIGN_CONTRACT.md`, `docs/MQTT_CONTRACT.md`, `docs/FIRMWARE_ARTIFACTS.md`.
 
-## 11.2 Những gì không nên hứa quá sớm
+Trạng thái hiện tại:
 
-Bạn nên ghi rõ các phần **không phải trọng tâm của phiên bản hiện tại**, ví dụ:
+- Đã có contract OTA.
+- Đã có topic design cho manifest, desired, progress, event.
+- Đã có firmware artifact structure.
+- Chưa nên mô tả OTA như feature production đã chạy end-to-end nếu chưa có implementation/test xác nhận.
 
-* tối ưu pin chuyên sâu
-* đánh giá năng lượng dài hạn
-* commercial-grade security hardening
-* large-scale deployment
-* interoperability với mọi hãng third-party
-* AI/predictive control
+Nội dung nên viết:
 
-Trong sample report trước đó, phần “ràng buộc và phạm vi” cũng tách rõ những gì chỉ mô phỏng chức năng để kiểm chứng kiến trúc, thay vì khẳng định mọi thành phần đã production-ready.
+- Cloud tạo OTA campaign.
+- Gateway nhận manifest qua MQTT.
+- Gateway tải `.ota` qua HTTP.
+- Gateway verify `sha256` và `size_bytes`.
+- Gateway stage artifact vào `SB_OTA_DIR`.
+- Gateway offer firmware qua Zigbee OTA.
+- Gateway publish progress/event.
 
----
+Trade-off:
 
-# 12) Context về giá trị của đề tài
+- Ưu điểm: không gửi binary qua MQTT, giảm tải broker, dễ retry/download.
+- Nhược điểm: cần HTTP artifact storage, checksum/signature, rollback và version compatibility.
 
-Bạn nên chốt phần này thật rõ.
+### 13.2 Security hardening
 
-## 12.1 Giá trị kỹ thuật
+Nguồn: `cloud/app/config.py`, `mqtt/docker/docker-compose.yml`, `gateway/Z3GatewayHost/app/net_mgr.c`, `docs/iot_zigbee_sprint_plan.md`.
 
-Đề tài cho phép kiểm chứng một hệ IoT nhiều lớp gồm:
+Đã có nền:
 
-* wireless embedded layer
-* gateway layer
-* messaging layer
-* cloud/app layer
+- MQTT username/password.
+- Mosquitto ACL/config.
+- Zigbee network creator security và permit join window.
+- Environment variables cho Cloud config.
 
-## 12.2 Giá trị thực tiễn
+Nên làm tiếp:
 
-Case **light / switch / occupancy** là một bài toán gần thực tế, dễ hiểu, dễ demo, và có thể mở rộng thành:
+- Backend auth router thật cho `/auth/login` và `/auth/logout`.
+- Bearer token/JWT hoặc session token cho mobile requests.
+- MQTT over TLS, port production có thể tiến tới `8883`.
+- Credential management: không hard-code password trong source.
+- Secret rotation.
+- Audit log cho command, automation, login.
+- OTA artifact signing, không chỉ checksum.
 
-* energy saving
-* room automation
-* security scene
-* smart building control
+Trade-off:
 
-## 12.3 Giá trị học thuật
+- Tăng bảo mật nhưng tăng độ phức tạp triển khai.
+- TLS và auth cần quản lý certificate/token.
+- Với đồ án, nên ưu tiên mô tả threat model đơn giản trước rồi mới mở rộng.
 
-Đề tài thể hiện năng lực ở nhiều mặt:
+### 13.3 Realtime push
 
-* firmware
-* networking
-* message contract design
-* distributed system thinking
-* integration testing
-* extensibility planning
+Hiện app có thể dùng polling REST API. Roadmap lịch sử nhắc WebSocket real-time push.
 
----
+Hướng làm:
 
-# 13) Dàn ý context bạn có thể dùng thẳng cho báo cáo
+- Cloud push event/state update qua WebSocket.
+- Mobile subscribe socket để giảm polling.
 
-Dưới đây là **khung viết Chương 1** rất hợp với dự án của bạn.
+Trade-off:
 
-## 1. Tổng quan đề tài
+- UX nhanh hơn.
+- Backend phức tạp hơn, cần reconnect, heartbeat, auth cho socket.
 
-### 1.1 Bối cảnh và lý do chọn đề tài
+### 13.4 Groups và Scenes
 
-* nhu cầu smart home / smart building
-* vấn đề của hệ thống nhiều node
-* vì sao cần local network + remote control
-* vì sao chọn Zigbee
+Theo device capability matrix, groups/scenes nằm ngoài v1.
 
-### 1.2 Mục tiêu của đề tài
+Hướng làm:
 
-* xây dựng hệ thống end-to-end
-* local control + remote monitoring/control
-* có gateway, cloud, mobile app
-* có khả năng mở rộng OTA
+- Groups: điều khiển nhiều đèn cùng lúc.
+- Scenes: lưu preset ánh sáng, ví dụ "Presentation", "Night", "Meeting".
 
-### 1.3 Phạm vi triển khai
+Trade-off:
 
-* node: light, switch, occupancy sensor
-* gateway: Linux laptop, sau này Raspberry Pi
-* cloud: state + command + history
-* app: Flutter
-* chưa đi sâu production-scale
+- Phù hợp Smart Building thực tế hơn.
+- Cần design lại capability, UI, MQTT topic và gateway dispatch.
 
-### 1.4 Đối tượng hướng tới
+### 13.5 Capability mở rộng
 
-* người dùng cuối trong smart home
-* người vận hành / kỹ thuật viên
-* nhóm phát triển cần nền tảng dễ mở rộng
+Ngoài v1, docs đề cập:
 
-### 1.5 Phương pháp tiếp cận
+- light color,
+- color temperature,
+- transition time,
+- motion illuminance,
+- temperature.
 
-* thiết kế theo kiến trúc nhiều lớp
-* local-first
-* contract-first
-* phát triển từng vertical slice end-to-end
+Trade-off:
 
-### 1.6 Ý nghĩa khoa học và thực tiễn
+- Làm demo phong phú hơn.
+- Cần firmware, contract, cloud schema và UI cùng thay đổi.
 
-* kiểm chứng kiến trúc IoT nhiều lớp
-* thể hiện khả năng tích hợp embedded + cloud + app
-* có tiềm năng mở rộng thành hệ thống lớn hơn
+### 13.6 Raspberry Pi deployment
 
----
+Roadmap lịch sử có gateway migration từ Linux laptop sang Raspberry Pi.
 
-# 14) Bản mô tả context ngắn gọn, có thể đưa thẳng vào báo cáo
+Hướng làm:
 
-Bạn có thể dùng đoạn này gần như nguyên văn:
+- Chạy Z3Gateway C host app trên Raspberry Pi.
+- Kết nối EFR32 NCP qua USB/UART.
+- Tự động start service bằng systemd.
 
-> Đề tài hướng tới xây dựng một hệ thống smart home dựa trên kiến trúc IoT nhiều lớp, trong đó lớp local sử dụng mạng Zigbee để kết nối các node như light, switch và occupancy sensor; lớp trung gian sử dụng gateway chạy trên Linux để bridge dữ liệu giữa Zigbee và cloud; lớp trên cùng gồm cloud backend và mobile application phục vụ giám sát, điều khiển và mở rộng dịch vụ. Mục tiêu của hệ thống không chỉ dừng ở việc điều khiển thiết bị đơn lẻ, mà là kiểm chứng toàn bộ luồng dữ liệu end-to-end từ sensing, command dispatch, state synchronization đến khả năng mở rộng như automation, event logging và OTA. Với hướng tiếp cận này, đề tài vừa mang giá trị thực tiễn trong bối cảnh smart home/smart building, vừa mang giá trị kỹ thuật khi kết hợp embedded firmware, wireless networking, gateway software, cloud integration và mobile application trong cùng một hệ thống.
+Trade-off:
 
----
+- Gần môi trường production hơn.
+- Cần xử lý system service, device path, reboot recovery và log rotation.
 
-# 15) Chốt ngắn gọn
+## 14. Những điểm cần tránh viết sai trong báo cáo
 
-Phần **context** của dự án này nên làm rõ 5 ý:
+1. Không viết rằng hệ thống hiện dùng Python MQTT-to-IPC bridge. Kiến trúc hiện tại đã chuyển sang native Z3Gateway C direct MQTT integration.
+2. Không viết BLE là phần runtime chính nếu chưa có module BLE rõ ràng trong source.
+3. Không viết OTA đã hoàn thành end-to-end nếu chưa có test/implementation xác nhận.
+4. Không viết auth đã hoàn chỉnh: mobile có repository cho auth, nhưng Cloud backend chưa expose auth router.
+5. Không viết `occ` hoặc `occupancy` là official device_type. Official v1 device_type là `motion`; `occupancy` là state value.
+6. Không hứa groups/scenes/lock/unknown là v1 capability. Chúng đang là deferred/future.
+7. Không đưa private key, `.pem`, password thật hoặc secret vào báo cáo.
 
-* đây là **bài toán hệ thống**, không phải bài toán 1 node
-* Zigbee là **local network layer**
-* gateway là **trục xương sống**
-* cloud + app là **lớp quản trị và trải nghiệm người dùng**
-* OTA, scene, automation là **hướng mở rộng để hệ thống scale về sau**
+## 15. Gợi ý bố cục chương báo cáo
+
+### Chương 1 - Tổng quan đề tài
+
+- Bối cảnh Smart Home/Smart Building.
+- Vấn đề cần giải quyết.
+- Mục tiêu đề tài.
+- Phạm vi: Zigbee local network, Cloud API, MQTT, Gateway, Flutter app.
+- Kết quả mong đợi.
+
+### Chương 2 - Cơ sở lý thuyết
+
+- Zigbee network.
+- MQTT publish/subscribe.
+- REST API.
+- Gateway architecture.
+- Cloud backend.
+- Mobile app architecture.
+- Firmware/OTA concept.
+- Security trong IoT.
+
+### Chương 3 - Phân tích và thiết kế hệ thống
+
+- Use cases.
+- System architecture diagram.
+- Data flow downlink/uplink.
+- Database design.
+- MQTT contract.
+- API design.
+- Device capability matrix.
+
+### Chương 4 - Triển khai hệ thống
+
+- Cloud FastAPI.
+- MQTT broker Mosquitto.
+- Gateway C.
+- Firmware artifacts/flashing.
+- Flutter app.
+- Automation rule management.
+- Deploy local/EC2.
+
+### Chương 5 - Kiểm thử và đánh giá
+
+- Backend pytest.
+- Flutter tests.
+- Manual E2E test.
+- Hardware flashing test.
+- Command lifecycle test.
+- Automation test.
+- Đánh giá ưu điểm/hạn chế.
+
+### Chương 6 - Kết luận và hướng phát triển
+
+- Kết quả đạt được.
+- Hạn chế hiện tại.
+- Hướng phát triển: OTA, security hardening, WebSocket, groups/scenes, Raspberry Pi deployment.
+
+## 16. Đoạn văn mẫu có thể đưa vào báo cáo
+
+Đề tài xây dựng một nền tảng Smart Building mini sử dụng Zigbee làm mạng cục bộ để kết nối các thiết bị như đèn, công tắc và cảm biến chuyển động. Hệ thống được thiết kế theo kiến trúc nhiều lớp gồm Flutter mobile app, FastAPI cloud backend, Mosquitto MQTT broker, native Z3Gateway C host app và các thiết bị Zigbee chạy trên phần cứng EFR32. Người dùng có thể giám sát trạng thái thiết bị, gửi lệnh bật/tắt đèn từ xa, theo dõi vòng đời lệnh, xem lịch sử sự kiện và quản lý các automation rule cơ bản.
+
+Điểm cốt lõi của hệ thống là Gateway đóng vai trò cầu nối giữa thế giới IP/cloud và mạng Zigbee local. Cloud backend không giao tiếp trực tiếp với thiết bị Zigbee mà publish command qua MQTT. Gateway subscribe các command này, ánh xạ `device_id` sang thông tin Zigbee như `nodeId` và `endpoint`, sau đó gửi lệnh tương ứng xuống thiết bị thông qua EFR32 NCP. Ở chiều ngược lại, trạng thái thiết bị được Gateway publish lên MQTT để Cloud lưu vào database và mobile app hiển thị cho người dùng.
+
+Với cách tổ chức này, hệ thống có thể mở rộng theo nhiều hướng như OTA firmware update, MQTT over TLS, credential management, WebSocket realtime push, group control và scene control. Đây là nền tảng phù hợp cho một đồ án tốt nghiệp vì vừa thể hiện được kiến thức firmware/embedded, network protocol, backend, database, mobile app, deployment và kiểm thử end-to-end.
+
+## 17. Checklist chuẩn bị báo cáo
+
+- [ ] Vẽ architecture diagram theo luồng Mobile -> Cloud -> MQTT -> Gateway -> Zigbee.
+- [ ] Vẽ sequence diagram cho light on/off command.
+- [ ] Vẽ sequence diagram cho device reported state.
+- [ ] Chụp màn hình mobile app: Home, Devices, Logs, Automation, Settings.
+- [ ] Chụp kết quả `GET /health`.
+- [ ] Chụp một request command và command status.
+- [ ] Chụp database hoặc API response cho devices/events/automations.
+- [ ] Chạy và lưu kết quả `pytest cloud/tests -q`.
+- [ ] Chạy và lưu kết quả `flutter test`.
+- [ ] Nếu có hardware, chụp quá trình flash bằng Simplicity Commander.
+- [ ] Tách rõ phần đã làm và phần future work.
 

@@ -57,12 +57,13 @@ function Build-LaTeX {
     Write-Host "  [1/2] pdflatex (pass 1)..." -ForegroundColor Yellow
     $stdOut1 = Join-Path $OUT_DIR "build_stdout_1.log"
     $stdErr1 = Join-Path $OUT_DIR "build_stderr_1.log"
-    $proc1 = Start-Process -FilePath "pdflatex" -ArgumentList $buildArgs `
-        -WorkingDirectory $PROJECT_DIR -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput $stdOut1 `
-        -RedirectStandardError $stdErr1
     
-    if ($proc1.ExitCode -ne 0) {
+    # Run pdflatex directly to be robust and get correct exit code
+    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut1 2> $stdErr1
+    $exitCode1 = $LASTEXITCODE
+    Write-Host "DEBUG: exitCode1 is $exitCode1" -ForegroundColor Yellow
+    
+    if ($exitCode1 -ne 0) {
         Write-Host "  X Loi build (pass 1)! Xem log:" -ForegroundColor Red
         $logFile = Join-Path $OUT_DIR "main.log"
         if (Test-Path $logFile) {
@@ -84,12 +85,11 @@ function Build-LaTeX {
     Write-Host "  [2/2] pdflatex (pass 2 - TOC/refs)..." -ForegroundColor Yellow
     $stdOut2 = Join-Path $OUT_DIR "build_stdout_2.log"
     $stdErr2 = Join-Path $OUT_DIR "build_stderr_2.log"
-    $proc2 = Start-Process -FilePath "pdflatex" -ArgumentList $buildArgs `
-        -WorkingDirectory $PROJECT_DIR -NoNewWindow -Wait -PassThru `
-        -RedirectStandardOutput $stdOut2 `
-        -RedirectStandardError $stdErr2
     
-    if ($proc2.ExitCode -ne 0) {
+    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut2 2> $stdErr2
+    $exitCode2 = $LASTEXITCODE
+    
+    if ($exitCode2 -ne 0) {
         Write-Host "  X Loi build (pass 2)!" -ForegroundColor Red
         return $false
     }
