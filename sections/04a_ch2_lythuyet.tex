@@ -36,6 +36,7 @@ Zigbee là giao thức mạng không dây công suất thấp, tốc độ truy�
 \label{sec:ch2-zigbee-roles}
 
 Mạng truyền thông Zigbee định nghĩa ba vai trò thiết bị vật lý cơ bản để phân cấp quản lý:
+
 \textbf{Zigbee Coordinator (ZC):} Thiết bị duy nhất có nhiệm vụ khởi tạo mạng vô tuyến ban đầu, cấu hình các tham số bảo mật và đóng vai trò làm Trust Center cấp phát khóa mạng. Trong hệ thống này, Coordinator chạy firmware NCP (Network Co-Processor) kết nối trực tiếp với Gateway host qua cổng nối tiếp UART. Địa chỉ mạng 16-bit của Coordinator luôn cố định là \texttt{0x0000}.
 
 \textbf{Zigbee Router (ZR):} Thiết bị có nguồn cấp trực tiếp (không dùng pin), có nhiệm vụ định tuyến và chuyển tiếp các gói tin trong mạng mesh để mở rộng khoảng cách phủ sóng. Trong đồ án, các thiết bị đèn thông minh (Z3Light) và công tắc (Z3Switch) hoạt động ở vai trò Router, luôn luôn ở trạng thái thu phát sóng và không chuyển sang chế độ sleep.
@@ -50,7 +51,7 @@ Zigbee hỗ trợ ba topo mạng chính bao gồm topo hình sao, topo hình câ
 Mạng hình sao (Star Topology) được mô tả trong Hình \ref{fig:ch2-zigbee-star}, là mô hình đơn giản nhất trong đó tất cả các node Router và End Device kết nối trực tiếp đến một Coordinator trung tâm.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\textwidth]{Images/Star.png}
+    \includegraphics[width=0.45\textwidth]{Images/Star_topology.png}
     \caption{Star topology -- Thiết bị kết nối qua Coordinator trung tâm}
     \label{fig:ch2-zigbee-star}
 \end{figure}
@@ -59,7 +60,7 @@ Mạng hình sao (Star Topology) được mô tả trong Hình \ref{fig:ch2-zigb
 Mạng lưới (Mesh Topology) được thể hiện trong Hình \ref{fig:ch2-zigbee-mesh}, là cấu trúc mạnh mẽ nhất của chuẩn Zigbee. Các node Router có khả năng tự động liên kết nối mạng với nhau tạo thành mạng lưới truyền dẫn điểm-điểm đa chặng (multi-hop routing).
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\textwidth]{Images/Mesh.png}
+    \includegraphics[width=0.45\textwidth]{Images/Mesh_topology.png}
     \caption{Mesh topology -- Định tuyến đa chặng linh hoạt}
     \label{fig:ch2-zigbee-mesh}
 \end{figure}
@@ -68,7 +69,7 @@ Mạng lưới (Mesh Topology) được thể hiện trong Hình \ref{fig:ch2-zi
 Mạng hình cây (Tree Topology) được mô phỏng trong Hình \ref{fig:ch2-zigbee-tree}, là cấu trúc phân cấp hình cây trong đó Coordinator là gốc, các Router đóng vai trò nhánh cây trung gian và End Device là lá cây ở cấp thấp nhất.
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\textwidth]{Images/Tree.png}
+    \includegraphics[width=0.45\textwidth]{Images/Tree_topology.png}
     \caption{Tree topology -- Cấu trúc phân cấp hình cây}
     \label{fig:ch2-zigbee-tree}
 \end{figure}
@@ -87,6 +88,7 @@ Kiến trúc phân tầng của giao thức Zigbee được xây dựng trên n�
 \end{figure}
 
 Sự phân chia chức năng giữa các lớp trong stack bao gồm:
+
 \textbf{Lớp PHY (Physical Layer):} Được định nghĩa bởi chuẩn IEEE 802.15.4, chịu trách nhiệm truyền phát các bit dữ liệu trên dải sóng vô tuyến tần số 2.4 GHz, thực hiện điều chế tín hiệu DSSS (Direct Sequence Spread Spectrum) và đo năng lượng kênh (LQI).
 
 \textbf{Lớp MAC (Medium Access Control):} Quản lý việc truy cập kênh vô tuyến chung sử dụng cơ thức CSMA-CA (Carrier Sense Multiple Access with Collision Avoidance), kiểm soát lỗi truyền tin cậy qua cơ chế ACK và định dạng cấu trúc khung truyền MAC.
@@ -101,6 +103,7 @@ Sự phân chia chức năng giữa các lớp trong stack bao gồm:
 \label{sec:ch2-zigbee-address}
 
 Mỗi thiết bị Zigbee sở hữu hai loại địa chỉ phân biệt để phục vụ truyền thông:
+
 \textbf{Địa chỉ vật lý EUI-64 (Extended Unique Identifier):} Là địa chỉ MAC 64-bit cố định duy nhất được nhà sản xuất nạp sẵn vào chip bán dẫn. Địa chỉ này được đồ án sử dụng làm khóa định danh duy nhất (primary key) để xác định thiết bị trên MQTT và cơ sở dữ liệu Cloud, đảm bảo tính nhất quán ngay cả khi thiết bị ngắt kết nối vật lý.
 
 \textbf{Địa chỉ mạng 16-bit (NwkAddr):} Là địa chỉ runtime được Coordinator cấp phát động cho thiết bị khi gia nhập mạng. Địa chỉ này có thể thay đổi sau mỗi lần thiết bị khởi động lại hoặc thực hiện rejoin mạng, do đó chỉ được dùng cho mục đích định tuyến lớp thấp của stack Zigbee và không được dùng làm primary key trên database.
@@ -113,6 +116,7 @@ Bảo mật mạng được kiểm soát thông qua hai loại khóa chính: Net
 Mạng được hình thành khi Gateway ra lệnh cho Coordinator (chạy firmware NCP) khởi chạy quét năng lượng vô tuyến để tự động chọn kênh tần số ít nhiễu nhất trong số 16 kênh từ kênh 11 đến 26. Sau khi thiết lập mạng thành công với một ID mạng PAN ID ngẫu nhiên không trùng lặp, Gateway ra lệnh mở cửa sổ permit-join trong một khoảng thời gian giới hạn (ví dụ 60 giây).
 
 Quá trình thiết bị con (End Device hoặc Router) gia nhập mạng diễn ra qua bốn bước cụ thể sau:
+
 \textbf{Bước 1 -- Khám phá mạng (Network Discovery):} Thiết bị con phát quảng bá tin nhắn Beacon Request để quét các mạng xung quanh. Coordinator nhận được tin nhắn và phản hồi lại bằng Beacon Frame chứa thông tin PAN ID và trạng thái cho phép gia nhập mạng (Association Permit = True).
 
 \textbf{Bước 2 -- Kết nối vật lý (MAC Association):} Thiết bị con gửi yêu cầu kết nối MAC Association Request chứa địa chỉ EUI-64 và khả năng phần cứng (node capability). Coordinator phê duyệt và cấp phát một địa chỉ mạng 16-bit ngẫu nhiên thông qua bản tin MAC Association Response.
@@ -133,6 +137,7 @@ ZCL đóng vai trò là một chuẩn mô tả dữ liệu ở lớp ứng dụn
 \label{sec:ch2-zcl-structure}
 
 Mô hình ZCL tổ chức dữ liệu theo kiến trúc hướng đối tượng, bao gồm:
+
 \textbf{Cluster (Cụm chức năng):} Là đơn vị logic gom nhóm các thuộc tính và lệnh điều khiển có liên quan chặt chẽ tới một chức năng vật lý cụ thể (ví dụ: On/Off Cluster, Temperature Measurement Cluster). Mỗi cluster được gán một mã ID 16-bit duy nhất.
 
 \textbf{Attribute (Thuộc tính):} Các biến lưu trữ trạng thái thực tế của thiết bị bên trong một cluster (ví dụ: thuộc tính \texttt{OnOff} kiểu Boolean lưu trạng thái bật/tắt của đèn, thuộc tính \texttt{MeasuredValue} lưu giá trị nhiệt độ đo được).
@@ -143,7 +148,7 @@ ZCL phân chia rõ ràng vai trò Client và Server. Server cluster là nơi lư
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.55\textwidth]{Images/Client_Server_Model.png}
+    \includegraphics[width=0.55\textwidth]{Images/Cluster_binding.png}
     \caption{Mô hình tương tác Client/Server trong ZCL}
     \label{fig:ch2-zcl-client-server}
 \end{figure}
@@ -178,7 +183,7 @@ Mô hình publish/subscribe của MQTT loại bỏ hoàn toàn sự kết nối 
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{Images/MQTT_pub-sub.png}
+    \includegraphics[width=0.75\textwidth]{Images/Mqtt_broker_archi.drawio.png}
     \caption{Kiến trúc truyền thông Publish/Subscribe qua Broker trung gian}
     \label{fig:ch2-mqtt-flow}
 \end{figure}

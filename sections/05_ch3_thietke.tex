@@ -29,9 +29,9 @@ Hệ thống được thiết kế để đáp ứng các yêu cầu chức năn
 \begin{tabular}{|p{3cm}|p{3.5cm}|p{8cm}|}
 \hline
 \textbf{Nhóm tính năng} & \textbf{Yêu cầu chức năng} & \textbf{Mô tả chi tiết} \\ \hline
-\multirow{2}{*}{Quản lý thiết bị} & Join mạng thiết bị & Cho phép thiết bị Zigbee mới gia nhập vào mạng thông qua việc kích hoạt mở permit-join từ xa. \\ \cline{2-3} 
+\multirow{2}{*}{Quản lý thiết bị} & Gia nhập mạng Zigbee & Cho phép thiết bị Zigbee mới gia nhập vào mạng thông qua việc kích hoạt mở permit-join từ xa. \\ \cline{2-3} 
  & Quản lý danh mục & Quản lý thông tin tổ chức tòa nhà (nhà, phòng) và danh sách thiết bị logic qua REST API. \\ \hline
-\multirow{2}{*}{Giám sát \& Điều khiển} & Báo cáo trạng thái & Cập nhật và lưu trữ trạng thái thực tế (reported state) của thiết bị lên Cloud khi có thay đổi. \\ \cline{2-3} 
+\multirow{2}{*}{\parbox{2.8cm}{Giám sát \&\\ Điều khiển}} & Báo cáo trạng thái & Cập nhật và lưu trữ trạng thái thực tế (reported state) của thiết bị lên Cloud khi có thay đổi. \\ \cline{2-3} 
  & Điều khiển phụ tải & Cho phép gửi lệnh bật/tắt thiết bị đèn từ Cloud xuống mạng Zigbee thông qua Gateway. \\ \hline
 \multirow{2}{*}{Tự động hóa} & Liên kết trực tiếp & Cho phép công tắc điều khiển đèn cục bộ thông qua cơ chế binding lớp vô tuyến của Zigbee. \\ \cline{2-3} 
  & Theo dõi vòng đời lệnh & Theo dõi trạng thái lệnh qua các pha (accepted, queued, sent, executed, failed, timeout). \\ \hline
@@ -44,6 +44,7 @@ Hệ thống được thiết kế để đáp ứng các yêu cầu chức năn
 \label{sec:ch3-yeucau-phichucnang}
 
 Hệ thống phải đảm bảo các tiêu chí kỹ thuật vận hành phi chức năng sau:
+
 \textbf{Độ trễ phản hồi (Latency):} Thời gian xử lý lệnh từ lúc client gọi API gửi lệnh điều khiển cho tới khi nhận được phản hồi trạng thái từ thiết bị đèn thực tế qua Gateway phải nằm trong ngưỡng cho phép (dưới 2 giây trong điều kiện mạng ổn định).
 
 \textbf{Khả năng hoạt động độc lập (Offline Capability):} Khi mất kết nối internet lên Cloud Backend, các kịch bản tự động hóa cục bộ (công tắc bật/tắt đèn qua local binding) phải hoạt động bình thường nhờ logic xử lý trọn vẹn trong mạng mesh Zigbee.
@@ -111,14 +112,14 @@ Mạng Zigbee cục bộ sử dụng mô hình mesh-tree phân cấp. Coordinato
 \begin{tabular}{|l|l|l|l|}
 \hline
 \textbf{Loại thiết bị} & \textbf{Zigbee Role} & \textbf{Server Clusters} & \textbf{Client Clusters} \\ \hline
-Coordinator / NCP & ZC (Coordinator) & -- & On/Off Client (0x0006) \\ \hline
+Coordinator / NCP & ZC (Coordinator) & -- & On/Off (0x0006) \\ \hline
 Light Device & ZR (Router) & On/Off (0x0006) & -- \\ \hline
 Switch Device & ZR (Router) & -- & On/Off (0x0006) \\ \hline
 Occupancy Sensor & ZED (End Device) & Occupancy Sensing (0x0406) & -- \\ \hline
 \end{tabular}
 \end{table}
 
-\noindent Cấu hình cluster trong Bảng \ref{tab:ch3-device-roles} đảm bảo các thiết bị chỉ implement các chức năng tối thiểu theo đúng thiết kế của Silicon Labs để tiết kiệm bộ nhớ flash của chip.
+\noindent Cấu hình cluster trong Bảng \ref{tab:ch3-device-roles} đảm bảo các thiết bị chỉ thực hiện các chức năng tối thiểu theo đúng thiết kế của Silicon Labs để tiết kiệm bộ nhớ flash của chip.
 
 % ========================================
 % 3.4 LUỒNG DỮ LIỆU CHÍNH (DATA FLOW)
@@ -147,9 +148,9 @@ Quá trình truyền dẫn Uplink diễn ra theo các bước tuần tự sau:
 
 \textbf{Bước 2 -- Nhận và chuyển đổi tại Coordinator:} Coordinator nhận được gói tin vô tuyến, chuyển đổi thành khung tin nhắn EZSP truyền qua UART/ASH nối tiếp lên Host Gateway.
 
-\textbf{Bước 3 -- Xử lý và publish tại Gateway:} Module \texttt{telemetry\_rx.c} trên Z3Gateway bắt callback dữ liệu, parse giá trị nhị phân thành định dạng trạng thái tương ứng, sau đó chuyển cho module \texttt{app\_mqtt.c} để publish tin nhắn reported lên MQTT Broker.
+\textbf{Bước 3 -- Xử lý và publish tại Gateway:} Module \texttt{telemetry\_rx.c} trên Z3Gateway bắt phản hồi dữ liệu, phân tích giá trị nhị phân thành định dạng trạng thái tương ứng, sau đó chuyển cho module \texttt{app\_mqtt.c} để xuất bản tin nhắn được báo cáo lên MQTT Broker.
 
-\textbf{Bước 4 -- Đăng ký và lưu trữ tại Cloud:} Cloud Backend subscribe chủ đề reported qua MQTT client chạy nền, bắt được tin nhắn và lưu trữ giá trị trạng thái mới vào PostgreSQL.
+\textbf{Bước 4 -- Đăng ký và lưu trữ tại Cloud:} Cloud Backend đăng kí chủ đề được báo cáo qua MQTT client chạy nền, bắt được tin nhắn và lưu trữ giá trị trạng thái mới vào PostgreSQL.
 
 \subsection{Luồng gửi lệnh điều khiển (Downlink Flow)}
 \label{sec:ch3-dataflow-downlink}
@@ -168,9 +169,9 @@ Các bước cụ thể trong quy trình Downlink bao gồm:
 
 \textbf{Bước 1 -- Gửi yêu cầu điều khiển từ UI:} Người dùng thao tác trên giao diện, gọi REST API điều khiển (\text{POST /api/devices/\{id\}/command}).
 
-\textbf{Bước 2 -- Tiếp nhận và gửi request từ Cloud:} Cloud API tạo bản ghi lệnh điều khiển mới trong database với trạng thái khởi tạo \text{accepted}, đồng thời publish tin nhắn command request lên MQTT topic của Gateway.
+\textbf{Bước 2 -- Tiếp nhận và gửi yêu cầu từ Cloud:} Cloud API tạo bản ghi lệnh điều khiển mới trong cơ sở dữ liệu với trạng thái khởi tạo \text{accepted}, đồng thời xuất bản tin nhắn lệnh điều khiển lên MQTT topic của Gateway.
 
-\textbf{Bước 3 -- Nhận và phân tích lệnh tại Gateway:} Gateway nhận được bản tin MQTT qua module \texttt{app\_mqtt.c}, tiến hành parse JSON envelope tại \texttt{cmd\_handler.c} để xác minh tính hợp lệ.
+\textbf{Bước 3 -- Nhận và phân tích lệnh tại Gateway:} Gateway nhận được bản tin MQTT qua module \texttt{app\_mqtt.c}, tiến hành phân tích JSON envelope tại \texttt{cmd\_handler.c} để xác minh tính hợp lệ.
 
 \textbf{Bước 4 -- Tra cứu địa chỉ và gửi lệnh ZCL:} Gateway tra cứu bảng địa chỉ thiết bị trong RAM tại \texttt{device\_registry.c} để lấy địa chỉ 16-bit tương ứng của Light, sau đó gọi \texttt{light\_ctrl.c} gửi khung lệnh ZCL On/Off xuống Coordinator qua UART.
 
@@ -197,7 +198,7 @@ Trong đó, các giá trị mặc định được cấu hình trong môi trư�
 \centering
 \caption{Thiết kế phân lớp các kênh truyền MQTT}
 \label{tab:ch3-channels}
-\begin{tabular}{|l|l|l|p{7cm}|c|}
+\begin{tabular}{|l|l|l|l|c|}
 \hline
 \textbf{Nhóm kênh} & \textbf{Hướng truyền} & \textbf{Publisher} & \textbf{Subscriber} & \textbf{QoS} \\ \hline
 \texttt{gateway/online} & Uplink & Gateway & Cloud & 1 (Retain) \\ \hline
@@ -287,8 +288,9 @@ GET & \text{/api/events} & Truy vấn lịch sử sự kiện (phân trang và l
 \label{sec:ch3-tradeoffs}
 
 Trong quá trình thiết kế hệ thống, một số quyết định kỹ thuật quan trọng đã được đưa ra để tối ưu hiệu năng:
-\textbf{Loại bỏ hoàn toàn cầu nối Python trung gian tại Gateway (Tháng 4/2026):} Kiến trúc cũ sử dụng một script Python chạy nền để làm bridge chuyển đổi IPC (Unix socket/NDJSON) sang MQTT. Quyết định tích hợp thư viện MQTT trực tiếp vào mã nguồn C của Z3Gateway giúp loại bỏ một tiến trình, tiết kiệm tài nguyên CPU nhúng và giảm trễ truyền dẫn. Tuy nhiên, đánh đổi lại là việc duy trì và thay đổi cấu trúc dữ liệu trên Gateway C đòi hỏi biên dịch lại mã nguồn C phức tạp hơn.
+
+\textbf{Loại bỏ hoàn toàn cầu nối Python trung gian tại Gateway (Tháng 4/2026):} Kiến trúc cũ sử dụng một script Python chạy nền để làm cầu nối chuyển đổi IPC (Unix socket/NDJSON) sang MQTT. Quyết định tích hợp thư viện MQTT trực tiếp vào mã nguồn C của Z3Gateway giúp loại bỏ một tiến trình, tiết kiệm tài nguyên CPU nhúng và giảm trễ truyền dẫn. Tuy nhiên, đánh đổi lại là việc duy trì và thay đổi cấu trúc dữ liệu trên Gateway C đòi hỏi biên dịch lại mã nguồn C phức tạp hơn.
 
 \textbf{Sử dụng định danh logic \text{device\_id} thay vì EUI-64 làm khóa bền:} Địa chỉ EUI-64 gắn chặt với chip vô tuyến vật lý. Thiết kế sử dụng \text{device\_id} logic tự sinh làm khóa chính trên Cloud giúp hệ thống dễ dàng thay thế phần cứng thiết bị bị hỏng bằng một thiết bị mới mà không cần cập nhật lại toàn bộ các liên kết trong database.
 
-\textbf{Chỉ Retain bản tin State, không Retain bản tin Command:} Việc retain bản tin trạng thái reported giúp các client mobile khi kết nối sau lấy ngay được giao diện cập nhật. Đối với command, không sử dụng retain để tránh tình trạng khi Gateway mất kết nối và online trở lại bị Broker gửi lại các lệnh bật/tắt cũ, gây nguy hiểm cho thiết bị chấp hành thực tế.
+\textbf{Chỉ giữ lại bản tin State, không giữ lại bản tin Command:} Việc giữ lại bản tin trạng thái reported giúp các client mobile khi kết nối sau lấy ngay được giao diện cập nhật. Đối với command, không sử dụng retain để tránh tình trạng khi Gateway mất kết nối và online trở lại bị Broker gửi lại các lệnh bật/tắt cũ, gây nguy hiểm cho thiết bị chấp hành thực tế.
