@@ -4,257 +4,286 @@
 \chapter{CƠ SỞ LÝ THUYẾT VÀ CÔNG NGHỆ NỀN}
 \label{ch:lythuyet}
 
-% ----- TÓM TẮT CHƯƠNG -----
 \vspace{0.5cm}
-\noindent\textit{Chương này tập trung giải thích các nền tảng lý thuyết và công nghệ cốt lõi làm cơ sở cho việc thiết kế và triển khai hệ thống. Nội dung bao gồm tổng quan về IoT và kiến trúc tòa nhà thông minh, giao thức truyền thông mạng không dây Zigbee, thư viện ZCL định nghĩa mô hình thiết bị, giao thức nhắn tin MQTT, kênh giao tiếp UART và đặc tả EZSP/ASH, cùng thông tin chi tiết về phần cứng và kit phát triển EFR32MG12.}
+\noindent\textit{Chương 2 trình bày các cơ sở lý thuyết và công nghệ được sử dụng để xây dựng hệ thống IoT Zigbee Smart Building. Nội dung gồm mô hình IoT trong tòa nhà thông minh, mạng Zigbee, mô hình thiết bị theo Zigbee Cluster Library, vai trò của Gateway, giao thức MQTT, giao tiếp giữa Host và EFR32 NCP, Cloud Backend, Mobile App, firmware/OTA và một số vấn đề bảo mật cơ bản. Các phần dưới đây được trình bày ở mức nền tảng để làm cơ sở cho phần thiết kế và triển khai ở các chương sau, không đi vào log chạy thử hay kết quả thực nghiệm.}
 \vspace{0.5cm}
 
-% ========================================
-% 2.1 TỔNG QUAN IoT VÀ SMART BUILDING
 % ========================================
 \section{Tổng quan IoT và Smart Building}
-\label{sec:ch2-iot-smartbuilding}
+\label{sec:ch2-iot-smart-building}
 
-Internet vạn vật (Internet of Things - IoT) là mạng lưới các thiết bị vật lý được tích hợp cảm biến, phần mềm và các công nghệ kết nối khác nhằm mục đích trao đổi dữ liệu với các thiết bị và hệ thống khác qua Internet. Trong bối cảnh Smart Building (tòa nhà thông minh), hạ tầng IoT đóng vai trò xương sống kết nối hàng loạt cảm biến và cơ cấu chấp hành để thực hiện giám sát tự động.
+Internet of Things (IoT), hay Internet vạn vật, là mô hình kết nối các thiết bị vật lý với phần mềm thông qua mạng truyền thông. Thiết bị trong hệ thống IoT thường có cảm biến, bộ xử lý, phần mềm nhúng và khả năng trao đổi dữ liệu với các thành phần khác. Trong phạm vi đồ án, IoT được xét theo hướng ứng dụng trong một phòng/lab thông minh, nơi thiết bị có thể gửi trạng thái, nhận lệnh điều khiển và phối hợp với phần mềm phía trên.
 
-Hệ thống điều khiển trong tòa nhà thông minh được tổ chức theo mô hình dòng dữ liệu khép kín bao gồm các pha: thu thập dữ liệu (sensing), truyền dẫn (communication), xử lý trung tâm (processing), ra quyết định điều khiển (control) và hiển thị giám sát (monitoring). Các cảm biến (nhiệt độ, ánh sáng, hiện diện) liên tục đo đạc môi trường vật lý, gửi dữ liệu qua mạng truyền thông không dây cục bộ tới bộ xử lý trung tâm (Gateway). Từ đó, Gateway đồng bộ trạng thái lên đám mây và nhận các quyết định điều khiển gửi xuống các cơ cấu chấp hành (đèn, rơ-le công tắc) để thay đổi trạng thái môi trường.
+Smart Building là một hướng ứng dụng của IoT trong môi trường tòa nhà. Hệ thống thường bao gồm sensor (cảm biến), actuator (thiết bị chấp hành), Gateway (cổng kết nối), Cloud Backend (dịch vụ phía máy chủ) và App (ứng dụng người dùng). Sensor dùng để thu thập trạng thái, ví dụ cảm biến hiện diện phát hiện có người trong phòng. Actuator thực hiện hành động vật lý như bật/tắt đèn hoặc thay đổi trạng thái thiết bị. Gateway nối mạng thiết bị cục bộ với hệ thống phần mềm. Cloud Backend lưu dữ liệu, quản lý thiết bị và cung cấp Application Programming Interface (API) cho App.
+
+Một luồng IoT cơ bản thường bắt đầu từ việc thu thập dữ liệu, truyền dữ liệu, xử lý dữ liệu, phát sinh lệnh điều khiển và hiển thị lại trạng thái cho người dùng. Trong đồ án này, người dùng thao tác trên Flutter Mobile App; App gọi FastAPI Cloud REST API; Cloud trao đổi trạng thái và lệnh qua Mosquitto MQTT Broker; Z3Gateway C nhận bản tin MQTT và chuyển thành Zigbee command qua EFR32 NCP; thiết bị Zigbee phản hồi trạng thái theo chiều ngược lại.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\textwidth]{Images/ch2_iot_zigbee_system_architecture.png}
+    \caption{Kiến trúc tổng quát của hệ thống IoT Zigbee Smart Building}
+    \label{fig:ch2-iot-zigbee-architecture}
+\end{figure}
+
+Cách tổ chức trên giúp tách rõ trách nhiệm giữa các lớp. Mạng Zigbee xử lý truyền thông cục bộ cho thiết bị công suất thấp. Gateway đảm nhiệm chuyển đổi giữa Zigbee và MQTT. Cloud lưu dữ liệu và cung cấp API. App tập trung vào giao diện giám sát và điều khiển. Khi thiết kế hệ thống Smart Building, nhóm thực hiện cần cân bằng giữa xử lý cục bộ và xử lý trên Cloud. Xử lý cục bộ giúp giảm độ trễ trong một số tình huống, còn Cloud thuận lợi hơn cho lưu trữ, quản lý từ xa và mở rộng dữ liệu.
 
 % ========================================
-% 2.2 GIAO THỨC ZIGBEE
+\section{Zigbee và IEEE 802.15.4}
+\label{sec:ch2-zigbee-ieee}
+
+Zigbee là giao thức truyền thông không dây công suất thấp, thường được dùng trong các hệ thống cảm biến và điều khiển \cite{zigbee-spec-2023}. Đặc điểm của Zigbee là tốc độ dữ liệu không cao nhưng tiêu thụ năng lượng thấp, hỗ trợ nhiều thiết bị và có khả năng tổ chức mạng linh hoạt. Các đặc điểm này phù hợp với Smart Building, vì các thiết bị như đèn, công tắc và cảm biến hiện diện chủ yếu trao đổi trạng thái hoặc lệnh ngắn, không truyền dữ liệu dung lượng lớn.
+
+IEEE 802.15.4 là chuẩn ở tầng vật lý và tầng Medium Access Control (MAC) cho mạng cá nhân không dây công suất thấp. Zigbee sử dụng nền tảng này và bổ sung thêm các tầng phía trên như network layer, security và application layer \cite{silabs-ug103}. Có thể hiểu IEEE 802.15.4 quy định cách truyền nhận khung dữ liệu ở mức radio, còn Zigbee quy định thêm cách thiết bị tạo mạng, tham gia mạng, định tuyến và biểu diễn chức năng ứng dụng.
+
+Trong một hệ thống IoT, Zigbee không thay thế hoàn toàn Wi-Fi hoặc Ethernet. Zigbee phù hợp hơn ở lớp thiết bị cục bộ, nơi yêu cầu tiết kiệm năng lượng và truyền các bản tin nhỏ. Đổi lại, thiết bị Zigbee thường không giao tiếp trực tiếp với Internet, nên hệ thống cần Gateway làm cầu nối lên Cloud hoặc App.
+
+\begin{table}[H]
+\centering
+\caption{Đặc điểm chính của Zigbee trong hệ thống Smart Building}
+\label{tab:ch2-zigbee-characteristics}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{4cm}|>{\raggedright\arraybackslash}p{9cm}|}
+\hline
+\textbf{Đặc điểm} & \textbf{Ý nghĩa trong hệ thống} \\ \hline
+Công suất thấp & Phù hợp với cảm biến, công tắc và thiết bị nhúng cần hoạt động lâu dài. \\ \hline
+Băng thông thấp & Không phù hợp truyền dữ liệu lớn, nhưng đủ cho trạng thái, sự kiện và lệnh điều khiển. \\ \hline
+Hỗ trợ mesh & Có thể mở rộng vùng phủ thông qua các thiết bị có khả năng định tuyến. \\ \hline
+Mô hình ZCL & Chuẩn hóa chức năng thiết bị thành cluster, attribute và command. \\ \hline
+Cần Gateway & Thiết bị Zigbee không giao tiếp trực tiếp với App/Cloud qua Internet, nên cần Gateway làm cầu nối. \\ \hline
+\end{tabular}
+\end{table}
+
+Trong đồ án, Zigbee được dùng cho lớp thiết bị cục bộ. EFR32 NCP đóng vai trò radio coordinator, còn các thiết bị như Light, Switch và Occupancy Sensor là các thiết bị Zigbee trong mạng. Nhờ đó, phần thiết bị nhúng được tách khỏi phần Cloud/App, đồng thời vẫn có thể đồng bộ trạng thái và nhận lệnh điều khiển thông qua Gateway.
+
 % ========================================
-\section{Giao thức truyền thông Zigbee}
-\label{sec:ch2-zigbee}
-
-Để kết nối các thiết bị cảm biến và chấp hành có mật độ cao trong tòa nhà, giao thức mạng không dây tiêu thụ năng lượng thấp Zigbee được lựa chọn làm giải pháp truyền thông cục bộ chính.
-
-\subsection{Tổng quan về Zigbee}
-\label{sec:ch2-zigbee-overview}
-
-Zigbee là giao thức mạng không dây công suất thấp, tốc độ truyền dữ liệu thấp và độ tin cậy cao được xây dựng trên tiêu chuẩn IEEE 802.15.4 cho mạng cá nhân không dây (Wireless Personal Area Network - WPAN). Zigbee hoạt động chủ yếu trên dải tần không cấp phép ISM 2.4 GHz với tốc độ truyền dẫn lý thuyết là 250 kbps. Trong đồ án này, hệ thống sử dụng phiên bản chuẩn hóa Zigbee 3.0 thông qua ngăn xếp EmberZNet (Gecko SDK 4.5.0) của hãng Silicon Labs, hỗ trợ mã hóa bảo mật AES-128 bit và cơ chế Trust Center để kiểm soát thiết bị gia nhập mạng một cách an toàn.
-
-\subsection{Vai trò thiết bị trong mạng Zigbee}
+\section{Vai trò thiết bị trong mạng Zigbee}
 \label{sec:ch2-zigbee-roles}
 
-Mạng truyền thông Zigbee định nghĩa ba vai trò thiết bị vật lý cơ bản để phân cấp quản lý:
+Mạng Zigbee phân chia thiết bị theo vai trò để mạng có thể hình thành, duy trì kết nối và truyền dữ liệu. Ba vai trò cơ bản gồm Coordinator, Router và End Device. Coordinator tạo và quản lý mạng. Router có thể chuyển tiếp gói tin để mở rộng vùng phủ. End Device là thiết bị cuối, thực hiện chức năng ứng dụng như đo trạng thái hoặc nhận lệnh điều khiển.
 
-\textbf{Zigbee Coordinator (ZC):} Thiết bị duy nhất có nhiệm vụ khởi tạo mạng vô tuyến ban đầu, cấu hình các tham số bảo mật và đóng vai trò làm Trust Center cấp phát khóa mạng. Trong hệ thống này, Coordinator chạy firmware NCP (Network Co-Processor) kết nối trực tiếp với Gateway host qua cổng nối tiếp UART. Địa chỉ mạng 16-bit của Coordinator luôn cố định là \texttt{0x0000}.
+Coordinator là thiết bị khởi tạo mạng Zigbee. Thiết bị này chọn kênh, thiết lập Personal Area Network (PAN), quản lý quá trình cho phép thiết bị khác tham gia mạng và thường liên quan đến Trust Center trong cơ chế bảo mật. Trong kiến trúc Host--NCP, vai trò coordinator radio có thể đặt trên EFR32 NCP, còn ứng dụng Gateway chạy ở phía Host.
 
-\textbf{Zigbee Router (ZR):} Thiết bị có nguồn cấp trực tiếp (không dùng pin), có nhiệm vụ định tuyến và chuyển tiếp các gói tin trong mạng mesh để mở rộng khoảng cách phủ sóng. Trong đồ án, các thiết bị đèn thông minh (Z3Light) và công tắc (Z3Switch) hoạt động ở vai trò Router, luôn luôn ở trạng thái thu phát sóng và không chuyển sang chế độ sleep.
+Router là thiết bị có khả năng chuyển tiếp gói tin cho các node khác. Trong môi trường tòa nhà, Router giúp mở rộng vùng phủ khi thiết bị không thể liên lạc trực tiếp với Coordinator. Tuy nhiên, Router thường cần nguồn cấp ổn định hơn so với End Device vì phải duy trì chức năng định tuyến.
 
-\textbf{Zigbee End Device (ZED):} Thiết bị đầu cuối thu thập dữ liệu cảm biến, thường sử dụng nguồn pin và hoạt động ở chế độ Sleepy End Device (SED). Thiết bị SED có thể tắt khối vô tuyến thu phát để đi vào trạng thái ngủ sâu tiết kiệm pin khi không có sự kiện và chỉ thức dậy định kỳ để gửi dữ liệu tới thiết bị cha (Parent Node) của nó. Cảm biến hiện diện (Occupancy Sensor) trong đồ án được cấu hình ở vai trò ZED để tối ưu hóa năng lượng tiêu thụ.
+End Device là thiết bị cuối trong mạng. Một End Device có thể là cảm biến hiện diện, công tắc hoặc đèn. Thiết bị này tập trung vào chức năng ứng dụng, ví dụ gửi trạng thái có người/không có người hoặc nhận lệnh bật/tắt. Với các thiết bị dùng pin, End Device có thể được tối ưu để tiết kiệm năng lượng bằng cách ngủ trong một số khoảng thời gian.
 
-\subsection{Topology mạng vô tuyến}
+\begin{table}[H]
+\centering
+\caption{Vai trò thiết bị trong mạng Zigbee}
+\label{tab:ch2-zigbee-roles}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.5cm}|>{\raggedright\arraybackslash}p{5cm}|>{\raggedright\arraybackslash}p{4.5cm}|}
+\hline
+\textbf{Vai trò} & \textbf{Nhiệm vụ chính} & \textbf{Ví dụ trong đề tài} \\ \hline
+Coordinator & Tạo mạng, quản lý mạng và hỗ trợ thiết bị tham gia mạng. & EFR32 NCP gắn với Gateway. \\ \hline
+Router & Chuyển tiếp gói tin, mở rộng vùng phủ mạng. & Thiết bị luôn cấp nguồn nếu được cấu hình hỗ trợ routing. \\ \hline
+End Device & Thực hiện chức năng ứng dụng, gửi trạng thái hoặc nhận lệnh. & Light, Switch, Occupancy Sensor. \\ \hline
+\end{tabular}
+\end{table}
+
+Phần này không đi sâu vào thuật toán định tuyến của Zigbee. Mục tiêu là làm rõ vì sao Gateway cần một coordinator radio để quản lý mạng, và vì sao các thiết bị như light, switch, sensor có thể được tổ chức như các node trong cùng một mạng Zigbee.
+
+% ========================================
+\section{Topology mạng Zigbee}
 \label{sec:ch2-zigbee-topology}
 
-Zigbee hỗ trợ ba topo mạng chính bao gồm topo hình sao, topo hình cây và topo mạng lưới.
+Topology mô tả cách các node trong mạng được tổ chức và liên kết với nhau. Trong Zigbee, ba dạng topology thường gặp là star, tree và mesh. Việc lựa chọn topology ảnh hưởng trực tiếp đến vùng phủ, độ phức tạp khi quản lý mạng và khả năng mở rộng của hệ thống.
 
-Mạng hình sao (Star Topology) được mô tả trong Hình \ref{fig:ch2-zigbee-star}, là mô hình đơn giản nhất trong đó tất cả các node Router và End Device kết nối trực tiếp đến một Coordinator trung tâm.
+Với star topology, các thiết bị trao đổi dữ liệu thông qua một node trung tâm. Mô hình này đơn giản, dễ kiểm soát và phù hợp với phạm vi nhỏ. Hạn chế của nó là vùng phủ phụ thuộc nhiều vào node trung tâm; nếu thiết bị ở xa hoặc bị vật cản, chất lượng kết nối có thể giảm.
+
+Tree topology tổ chức mạng theo dạng phân cấp. Cách tổ chức này phù hợp khi muốn quản lý theo nhánh, ví dụ theo tầng hoặc theo khu vực trong tòa nhà. Hạn chế là các node phía dưới phụ thuộc vào node trung gian trong nhánh; khi node trung gian gặp sự cố, các node phía sau có thể bị ảnh hưởng.
+
+Mesh topology cho phép một số node chuyển tiếp gói tin qua nhiều đường khác nhau. Đây là topology đáng chú ý trong Smart Building vì môi trường tòa nhà thường có tường, vật cản và khoảng cách giữa các thiết bị. Mesh giúp mở rộng vùng phủ tốt hơn star topology, nhưng việc quản lý mạng và debug cũng phức tạp hơn.
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\textwidth]{Images/Star_topology.png}
-    \caption{Star topology -- Thiết bị kết nối qua Coordinator trung tâm}
-    \label{fig:ch2-zigbee-star}
-\end{figure}
-\noindent Ưu điểm của hình sao là dễ quản lý, trễ truyền dẫn nhỏ nhưng nhược điểm lớn là vùng phủ sóng bị giới hạn bởi công suất phát của một node Coordinator và Coordinator trở thành điểm lỗi duy nhất của toàn hệ thống (single point of failure).
-
-Mạng lưới (Mesh Topology) được thể hiện trong Hình \ref{fig:ch2-zigbee-mesh}, là cấu trúc mạnh mẽ nhất của chuẩn Zigbee. Các node Router có khả năng tự động liên kết nối mạng với nhau tạo thành mạng lưới truyền dẫn điểm-điểm đa chặng (multi-hop routing).
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.45\textwidth]{Images/Mesh_topology.png}
-    \caption{Mesh topology -- Định tuyến đa chặng linh hoạt}
+    \includegraphics[width=0.72\textwidth]{Images/Mesh_topology.png}
+    \caption{Minh họa topology dạng mesh trong mạng Zigbee}
     \label{fig:ch2-zigbee-mesh}
 \end{figure}
-\noindent Khi một chặng liên kết giữa hai node Router bị lỗi vật lý (do cản trở hoặc nhiễu sóng), thuật toán định tuyến AODV tích hợp sẵn trong NWK layer sẽ tự động tìm kiếm đường đi thay thế khác để truyền đạt thông tin tới đích, đảm bảo hệ thống tự phục hồi (self-healing).
 
-Mạng hình cây (Tree Topology) được mô phỏng trong Hình \ref{fig:ch2-zigbee-tree}, là cấu trúc phân cấp hình cây trong đó Coordinator là gốc, các Router đóng vai trò nhánh cây trung gian và End Device là lá cây ở cấp thấp nhất.
+Trong đồ án, Zigbee được lựa chọn để tạo mạng cục bộ cho các thiết bị trong phòng/lab. Dù số lượng thiết bị ở giai đoạn đồ án chưa lớn, nền tảng mesh của Zigbee vẫn có ý nghĩa vì nó cho phép hệ thống mở rộng sang nhiều node hơn khi cần.
+
+% ========================================
+\section{Zigbee Protocol Stack}
+\label{sec:ch2-zigbee-stack}
+
+Protocol Stack là tập hợp các tầng giao thức cùng tham gia vào quá trình truyền thông. Mỗi tầng đảm nhiệm một nhóm chức năng riêng, từ truyền tín hiệu vô tuyến ở tầng thấp đến biểu diễn lệnh ứng dụng ở tầng cao. Cách phân tầng này giúp hệ thống mạng dễ chuẩn hóa hơn, đồng thời giúp người phát triển xác định lỗi đang nằm ở tầng truyền dẫn, tầng mạng hay tầng ứng dụng.
+
+Tầng Physical (PHY) và MAC của Zigbee dựa trên IEEE 802.15.4. Tầng PHY liên quan đến tần số, kênh truyền và việc phát/thu tín hiệu vô tuyến. Tầng MAC quản lý cách các node truy cập môi trường truyền, định dạng khung dữ liệu cơ bản và một số cơ chế trao đổi ở mức liên kết.
+
+Tầng Network xử lý địa chỉ mạng, quá trình hình thành mạng, quá trình tham gia mạng và định tuyến. Khi một thiết bị mới join mạng, tầng này hỗ trợ cấp địa chỉ và xác định cách thiết bị gửi dữ liệu đến node đích. Với topology mesh, tầng Network có vai trò đáng kể vì gói tin có thể đi qua node trung gian.
+
+Ở phía trên, Application Support (APS) và Application/ZCL xử lý truyền thông ở mức ứng dụng. APS hỗ trợ addressing và binding, còn ZCL định nghĩa cluster, attribute và command. Nhờ đó, lệnh bật/tắt đèn trong hệ thống Zigbee được biểu diễn theo mô hình chuẩn, thay vì dùng chuỗi dữ liệu tự do do từng nhóm tự đặt.
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.45\textwidth]{Images/Tree_topology.png}
-    \caption{Tree topology -- Cấu trúc phân cấp hình cây}
-    \label{fig:ch2-zigbee-tree}
-\end{figure}
-\noindent Topo này kết hợp sự đơn giản trong định địa chỉ của topo hình sao và khả năng mở rộng khoảng cách của topo mạng lưới, phù hợp cho các mô hình quản lý phân lớp trong tòa nhà. Trong đồ án này, hệ thống triển khai thực tế theo cấu hình mạng mesh-tree linh hoạt.
-
-\subsection{Kiến trúc Protocol Stack}
-\label{sec:ch2-zigbee-layers}
-
-Kiến trúc phân tầng của giao thức Zigbee được xây dựng trên nền tảng chuẩn vật lý IEEE 802.15.4 như được mô tả chi tiết trong Hình \ref{fig:ch2-zigbee-stack}.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.5\textwidth]{Images/Zigbee_Architecture.png}
-    \caption{Kiến trúc phân tầng Zigbee Protocol Stack}
+    \includegraphics[width=0.78\textwidth]{Images/Zigbee_Architecture.png}
+    \caption{Kiến trúc tầng giao thức Zigbee}
     \label{fig:ch2-zigbee-stack}
 \end{figure}
 
-Sự phân chia chức năng giữa các lớp trong stack bao gồm:
-
-\textbf{Lớp PHY (Physical Layer):} Được định nghĩa bởi chuẩn IEEE 802.15.4, chịu trách nhiệm truyền phát các bit dữ liệu trên dải sóng vô tuyến tần số 2.4 GHz, thực hiện điều chế tín hiệu DSSS (Direct Sequence Spread Spectrum) và đo năng lượng kênh (LQI).
-
-\textbf{Lớp MAC (Medium Access Control):} Quản lý việc truy cập kênh vô tuyến chung sử dụng cơ thức CSMA-CA (Carrier Sense Multiple Access with Collision Avoidance), kiểm soát lỗi truyền tin cậy qua cơ chế ACK và định dạng cấu trúc khung truyền MAC.
-
-\textbf{Lớp NWK (Network Layer):} Do Zigbee Alliance định nghĩa, phụ trách cấp phát địa chỉ mạng 16-bit động cho thiết bị khi gia nhập mạng, xây dựng bảng định tuyến và bảo mật tầng mạng bằng Network Key dùng chung.
-
-\textbf{Lớp APS (Application Support Sublayer):} Cầu nối trung gian giữa lớp mạng NWK và lớp ứng dụng ZCL. APS phụ trách lọc các bản tin trùng lặp, duy trì Bảng Binding (liên kết trực tiếp) và thực hiện phân mảnh bản tin nếu kích thước dữ liệu vượt quá giới hạn MTU (127 bytes).
-
-\textbf{Lớp ZCL (Zigbee Cluster Library):} Định nghĩa mô hình trao đổi dữ liệu hướng đối tượng (cluster/attribute/command) giúp chuẩn hóa hành vi ứng dụng của thiết bị.
-
-\subsection{Địa chỉ và bảo mật trong mạng}
-\label{sec:ch2-zigbee-address}
-
-Mỗi thiết bị Zigbee sở hữu hai loại địa chỉ phân biệt để phục vụ truyền thông:
-
-\textbf{Địa chỉ vật lý EUI-64 (Extended Unique Identifier):} Là địa chỉ MAC 64-bit cố định duy nhất được nhà sản xuất nạp sẵn vào chip bán dẫn. Địa chỉ này được đồ án sử dụng làm khóa định danh duy nhất (primary key) để xác định thiết bị trên MQTT và cơ sở dữ liệu Cloud, đảm bảo tính nhất quán ngay cả khi thiết bị ngắt kết nối vật lý.
-
-\textbf{Địa chỉ mạng 16-bit (NwkAddr):} Là địa chỉ runtime được Coordinator cấp phát động cho thiết bị khi gia nhập mạng. Địa chỉ này có thể thay đổi sau mỗi lần thiết bị khởi động lại hoặc thực hiện rejoin mạng, do đó chỉ được dùng cho mục đích định tuyến lớp thấp của stack Zigbee và không được dùng làm primary key trên database.
-
-Bảo mật mạng được kiểm soát thông qua hai loại khóa chính: Network Key 128-bit dùng để mã hóa toàn bộ dữ liệu truyền trên không trung ở tầng NWK và Link Key 128-bit dùng để mã hóa kênh truyền bảo mật điểm-điểm giữa Coordinator/Trust Center và một thiết bị cụ thể khi trao đổi Network Key.
-
-\subsection{Quá trình hình thành và gia nhập mạng}
-\label{sec:ch2-zigbee-join-process}
-
-Mạng được hình thành khi Gateway ra lệnh cho Coordinator (chạy firmware NCP) khởi chạy quét năng lượng vô tuyến để tự động chọn kênh tần số ít nhiễu nhất trong số 16 kênh từ kênh 11 đến 26. Sau khi thiết lập mạng thành công với một ID mạng PAN ID ngẫu nhiên không trùng lặp, Gateway ra lệnh mở cửa sổ permit-join trong một khoảng thời gian giới hạn (ví dụ 60 giây).
-
-Quá trình thiết bị con (End Device hoặc Router) gia nhập mạng diễn ra qua bốn bước cụ thể sau:
-
-\textbf{Bước 1 -- Khám phá mạng (Network Discovery):} Thiết bị con phát quảng bá tin nhắn Beacon Request để quét các mạng xung quanh. Coordinator nhận được tin nhắn và phản hồi lại bằng Beacon Frame chứa thông tin PAN ID và trạng thái cho phép gia nhập mạng (Association Permit = True).
-
-\textbf{Bước 2 -- Kết nối vật lý (MAC Association):} Thiết bị con gửi yêu cầu kết nối MAC Association Request chứa địa chỉ EUI-64 và khả năng phần cứng (node capability). Coordinator phê duyệt và cấp phát một địa chỉ mạng 16-bit ngẫu nhiên thông qua bản tin MAC Association Response.
-
-\textbf{Bước 3 -- Xác thực bảo mật và trao đổi khóa:} Coordinator (Trust Center) mã hóa Network Key hiện tại bằng Link Key mặc định (chẳng hạn Link Key tiêu chuẩn \texttt{ZigbeeAlliance09}) và gửi xuống thiết bị con qua bản tin Transport Key. Thiết bị con nhận, giải mã để lấy Network Key và lưu trữ.
-
-\textbf{Bước 4 -- Cập nhật và Thông báo (Device Announce):} Thiết bị con phát quảng bá bản tin Device Announce chứa địa chỉ EUI-64 và địa chỉ mạng 16-bit mới của nó để thông báo cho toàn mạng biết sự hiện diện của mình. Lúc này, Gateway sẽ bắt sự kiện này để cập nhật bảng lưu trữ cục bộ.
+Ưu điểm của Protocol Stack chuẩn là tính tương thích và khả năng mở rộng tốt hơn. Hạn chế là người phát triển phải nắm thêm nhiều tầng giao thức khi debug. Với đồ án này, lợi ích của việc dùng stack chuẩn lớn hơn độ phức tạp phát sinh, vì hệ thống cần làm việc với nhiều loại thiết bị và cần ánh xạ rõ chức năng của từng thiết bị.
 
 % ========================================
-% 2.3 ZIGBEE CLUSTER LIBRARY (ZCL)
-% ========================================
-\section{Thư viện cluster Zigbee Cluster Library (ZCL)}
+\section{Zigbee Cluster Library và mô hình thiết bị}
 \label{sec:ch2-zcl}
 
-ZCL đóng vai trò là một chuẩn mô tả dữ liệu ở lớp ứng dụng, định nghĩa hành vi và định dạng trao đổi thông tin thống nhất giữa các thiết bị thuộc nhiều nhà sản xuất khác nhau.
+Zigbee Cluster Library (ZCL) là bộ đặc tả chuẩn hóa cách mô tả chức năng của thiết bị Zigbee \cite{zigbee-zcl}. Nếu các tầng thấp của Zigbee quy định cách dữ liệu đi qua mạng, ZCL quy định dữ liệu đó mang ý nghĩa gì ở tầng ứng dụng. Đây là phần cần thiết trong đồ án vì hệ thống sử dụng các thiết bị như Light, Switch và Occupancy Sensor.
 
-\subsection{Cấu trúc mô hình ZCL}
-\label{sec:ch2-zcl-structure}
+Trong ZCL, cluster là nhóm chức năng của thiết bị. Attribute là trạng thái hoặc thuộc tính nằm trong cluster. Command là lệnh được gửi đến thiết bị hoặc sự kiện do thiết bị phát ra. Ba khái niệm này tạo ra cách biểu diễn thống nhất giữa Gateway và thiết bị Zigbee. Ví dụ, lệnh bật/tắt đèn có thể được biểu diễn bằng On/Off Cluster thay vì một chuỗi text tự định nghĩa.
 
-Mô hình ZCL tổ chức dữ liệu theo kiến trúc hướng đối tượng, bao gồm:
+\begin{table}[H]
+\centering
+\caption{Một số cluster liên quan đến đề tài}
+\label{tab:ch2-zcl-clusters}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{4cm}|>{\raggedright\arraybackslash}p{3cm}|>{\raggedright\arraybackslash}p{6cm}|}
+\hline
+\textbf{Cluster} & \textbf{Identifier} & \textbf{Vai trò} \\ \hline
+On/Off Cluster & \texttt{0x0006} & Biểu diễn chức năng bật/tắt, phù hợp với light hoặc switch. \\ \hline
+Level Control Cluster & \texttt{0x0008} & Biểu diễn mức độ, ví dụ độ sáng của đèn nếu thiết bị hỗ trợ. \\ \hline
+Occupancy Sensing Cluster & \texttt{0x0406} & Biểu diễn trạng thái phát hiện hiện diện, phù hợp với occupancy sensor. \\ \hline
+\end{tabular}
+\end{table}
 
-\textbf{Cluster (Cụm chức năng):} Là đơn vị logic gom nhóm các thuộc tính và lệnh điều khiển có liên quan chặt chẽ tới một chức năng vật lý cụ thể (ví dụ: On/Off Cluster, Temperature Measurement Cluster). Mỗi cluster được gán một mã ID 16-bit duy nhất.
+Trong luồng điều khiển, App tạo yêu cầu ở mức người dùng, Cloud chuyển yêu cầu thành command logic, Gateway ánh xạ command sang action Zigbee, Zigbee stack đóng gói action theo cluster/command và thiết bị thực hiện lệnh. Ở chiều ngược lại, thiết bị gửi trạng thái mới, Gateway nhận báo cáo và publish reported state để Cloud lưu trữ và App hiển thị.
 
-\textbf{Attribute (Thuộc tính):} Các biến lưu trữ trạng thái thực tế của thiết bị bên trong một cluster (ví dụ: thuộc tính \texttt{OnOff} kiểu Boolean lưu trạng thái bật/tắt của đèn, thuộc tính \texttt{MeasuredValue} lưu giá trị nhiệt độ đo được).
-
-\textbf{Command (Lệnh điều khiển):} Các hành động tác động gửi tới thiết bị để thay đổi thuộc tính hoặc yêu cầu thiết bị thực thi một tác vụ (ví dụ: lệnh \texttt{Toggle} gửi tới On/Off cluster để đảo trạng thái thuộc tính \texttt{OnOff}).
-
-ZCL phân chia rõ ràng vai trò Client và Server. Server cluster là nơi lưu giữ giá trị thực tế của các thuộc tính (ví dụ: bóng đèn chứa On/Off Server Cluster chứa biến trạng thái của rơ-le đèn). Client cluster là nơi gửi đi các lệnh điều khiển thuộc tính hoặc truy vấn thuộc tính (ví dụ: công tắc chứa On/Off Client Cluster để gửi lệnh bật/tắt đi). Sự phối hợp Client/Server được mô phỏng trong Hình \ref{fig:ch2-zcl-client-server}.
-
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.55\textwidth]{Images/Cluster_binding.png}
-    \caption{Mô hình tương tác Client/Server trong ZCL}
-    \label{fig:ch2-zcl-client-server}
-\end{figure}
-
-\subsection{Cơ chế Binding (Liên kết)}
-\label{sec:ch2-zcl-binding}
-
-Binding là cơ chế cốt lõi của lớp APS cho phép thiết lập liên kết trực tiếp giữa hai endpoint của hai thiết bị Zigbee (ví dụ: liên kết từ On/Off Client của Switch tới On/Off Server của Light). Khi Bảng Binding được thiết lập thành công trên Coordinator, Switch có thể phát lệnh gửi đi trực tiếp thông qua địa chỉ logic của liên kết mà không cần ghi rõ địa chỉ 16-bit của Light. Cơ chế này giúp thiết bị công tắc bật/tắt đèn trực tiếp trong mạng cục bộ mà không cần sự can thiệp hay xử lý của phần mềm Gateway hoặc Cloud, giảm độ trễ tối đa và đảm bảo hệ thống vận hành tự động cục bộ khi mất kết nối mạng WAN.
+Việc sử dụng ZCL khiến phần phát triển phức tạp hơn so với tự đặt một payload đơn giản. Tuy nhiên, ZCL giúp hệ thống tránh tình trạng mỗi loại thiết bị dùng một cách biểu diễn riêng. Với đồ án này, lợi ích đó thể hiện rõ ở việc Gateway có thể xử lý lệnh theo loại thiết bị và chức năng, ví dụ tách lệnh bật/tắt light khỏi trạng thái phát hiện hiện diện của sensor.
 
 % ========================================
-% 2.4 GATEWAY TRONG HỆ THỐNG IoT
-% ========================================
-\section{Vai trò của Gateway trong hệ thống IoT}
+\section{Gateway trong hệ thống IoT}
 \label{sec:ch2-gateway}
 
-Gateway đóng vai trò là phần tử biên (Edge Device) chuyển đổi giao thức truyền thông hai chiều giữa lớp vô tuyến cục bộ RF và lớp mạng IP diện rộng.
+Gateway là thành phần nối mạng thiết bị cục bộ với hệ thống phần mềm phía trên. Trong hệ thống IoT Zigbee, thiết bị Zigbee không trực tiếp giao tiếp với REST API hoặc App. Gateway vì vậy cần chuyển đổi giữa hai miền: một bên là mạng Zigbee với cluster, attribute và command; bên còn lại là Cloud, MQTT và các dữ liệu ứng dụng.
 
-Gateway thu nhận các bản tin báo cáo thuộc tính ZCL (ZCL Attribute Reports) nhận từ thiết bị Zigbee qua UART/EZSP, phân tích dữ liệu nhị phân thô, sau đó chuyển đổi và đóng gói thành bản tin JSON tiêu chuẩn. JSON payload này được publish lên các MQTT topics tương ứng để Cloud xử lý. Ở chiều ngược lại, Gateway lắng nghe các yêu cầu điều khiển từ Cloud qua MQTT, giải mã và dispatch lệnh thành gói tin EZSP để Coordinator truyền xuống thiết bị đích.
+Trong đồ án này, Gateway được hiểu theo kiến trúc hiện tại: Z3Gateway C Host App kết nối với EFR32 NCP và tích hợp MQTT trực tiếp thông qua \texttt{libmosquitto}. Kiến trúc Python MQTT-to-IPC bridge cũ không được dùng làm mô hình chính cho báo cáo. Luồng đúng của hệ thống là Cloud/App trao đổi qua MQTT Broker; Z3Gateway C nhận command từ MQTT; Gateway gọi Zigbee action qua Ember AF/EZSP; thiết bị Zigbee phản hồi trạng thái; Gateway publish reported state hoặc event trở lại MQTT.
+
+Gateway không chỉ chuyển tiếp dữ liệu thô. Thành phần này còn parse payload, xác định loại thiết bị, ánh xạ command theo \texttt{device\_type}, gọi API của Zigbee stack, chuẩn hóa telemetry và publish trạng thái. Trong một số trường hợp, Gateway cũng có thể xử lý local automation ở mức cơ bản, ví dụ sự kiện từ switch hoặc sensor dẫn đến lệnh điều khiển light.
+
+Khi đặt nhiều logic ở Gateway, hệ thống có thể phản hồi nhanh hơn và giảm phụ thuộc vào Cloud trong một số tình huống. Tuy nhiên, Gateway cũng trở thành thành phần khó bảo trì hơn nếu trách nhiệm bị mở rộng quá nhiều. Vì vậy, ranh giới hợp lý là Gateway xử lý kết nối thiết bị và các phản ứng cục bộ cần thiết, còn Cloud đảm nhiệm lưu trữ, API, lịch sử và quản lý người dùng.
 
 % ========================================
-% 2.5 GIAO THỨC TRUYỀN THÔNG MQTT
-% ========================================
-\section{Giao thức truyền thông MQTT}
+\section{MQTT và cơ chế Publish/Subscribe}
 \label{sec:ch2-mqtt}
 
-MQTT (Message Queuing Telemetry Transport) là giao thức truyền thông điệp gọn nhẹ hoạt động theo mô hình Publish/Subscribe chạy trên nền tảng TCP/IP.
+Message Queuing Telemetry Transport (MQTT) là giao thức messaging nhẹ, được sử dụng phổ biến trong IoT để truyền telemetry và command giữa các thành phần phân tán \cite{hivemq-mqtt,emq-mqtt}. MQTT hoạt động theo mô hình publish/subscribe. Client không gửi dữ liệu trực tiếp cho nhau, mà publish message vào topic; broker nhận message và chuyển tiếp cho các client đang subscribe topic đó.
 
-\subsection{Kiến trúc Publish/Subscribe}
-\label{sec:ch2-mqtt-pubsub}
-
-Mô hình publish/subscribe của MQTT loại bỏ hoàn toàn sự kết nối trực tiếp giữa các máy khách gửi dữ liệu (Publishers) và máy khách nhận dữ liệu (Subscribers) bằng cách sử dụng một máy chủ trung gian gọi là Broker (Mosquitto Broker). Khi một client publish tin nhắn tới một chủ đề cụ thể (Topic), Broker sẽ nhận bản tin đó và chịu trách nhiệm phân phối bản tin đến tất cả các clients đã đăng ký lắng nghe chủ đề đó như được thể hiện trong Hình \ref{fig:ch2-mqtt-flow}.
+Các thuật ngữ cơ bản của MQTT gồm broker, client, topic, payload, publish, subscribe, Quality of Service (QoS), retained message và Last Will and Testament (LWT). Broker là trung tâm điều phối message. Client là thành phần kết nối tới broker, chẳng hạn Cloud Backend hoặc Gateway. Topic là đường dẫn logic dùng để phân loại message. Payload là nội dung message. Publish là hành động gửi message, còn subscribe là đăng ký nhận message.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.75\textwidth]{Images/Mqtt_broker_archi.drawio.png}
-    \caption{Kiến trúc truyền thông Publish/Subscribe qua Broker trung gian}
-    \label{fig:ch2-mqtt-flow}
+    \includegraphics[width=0.78\textwidth]{Images/Mqtt_broker_archi.drawio.png}
+    \caption{Mô hình broker trung tâm trong MQTT}
+    \label{fig:ch2-mqtt-broker}
 \end{figure}
 
-\subsection{Quality of Service (QoS) trong MQTT}
-\label{sec:ch2-mqtt-qos}
+Trong hệ thống của đồ án, Cloud và Gateway cùng kết nối tới Mosquitto MQTT Broker. Ở chiều điều khiển, App gọi REST API lên Cloud, Cloud publish command request xuống topic mà Gateway subscribe. Gateway nhận message, parse payload và chuyển thành Zigbee action. Ở chiều trạng thái, Gateway nhận reported state hoặc event từ mạng Zigbee, sau đó publish lên MQTT để Cloud lưu vào database và App hiển thị lại cho người dùng.
 
-MQTT định nghĩa ba mức đảm bảo chất lượng dịch vụ (QoS) nhằm cân bằng giữa độ tin cậy truyền dẫn và băng thông đường truyền:
-\textbf{QoS 0 (At most once):} Broker hoặc client gửi tin nhắn một lần duy nhất và không yêu cầu xác nhận. Tin nhắn có thể bị mất nếu mạng không ổn định, nhưng đây là mức nhanh nhất và tốn ít băng thông nhất. Phù hợp cho các bản tin telemetry báo cáo nhiệt độ định kỳ.
+QoS quy định mức đảm bảo truyền message. QoS 0 gửi tối đa một lần, nhẹ nhất nhưng có thể mất message. QoS 1 đảm bảo message đến ít nhất một lần, nhưng bên nhận cần xử lý khả năng trùng lặp. QoS 2 đảm bảo đúng một lần ở mức giao thức, nhưng phức tạp và tốn tài nguyên hơn. Retained message cho phép broker giữ message cuối cùng của một topic, nhờ đó subscriber mới có thể nhận trạng thái gần nhất. LWT giúp broker phát message thay mặt client nếu client mất kết nối bất thường.
 
-\textbf{QoS 1 (At least once):} Đảm bảo tin nhắn được truyền đến đích ít nhất một lần qua cơ chế xác nhận gói tin (PUBACK). Nếu bên gửi không nhận được PUBACK sau khoảng thời gian timeout, nó sẽ gửi lại tin nhắn (dẫn tới nguy cơ trùng lặp bản tin). Đồ án sử dụng mức QoS 1 cho toàn bộ luồng command và state reported quan trọng.
-
-\textbf{QoS 2 (Exactly once):} Đảm bảo tin nhắn đến đích đúng một lần duy nhất thông qua quá trình bắt tay bốn bước phức tạp. Đây là mức chậm nhất và tốn băng thông nhất, không được sử dụng trong hệ thống demo của đồ án.
-
-\subsection{Retained Messages và Last Will and Testament (LWT)}
-\label{sec:ch2-mqtt-features}
-
-\textbf{Retained Message (Tin nhắn lưu trữ):} Khi publish một bản tin với cờ Retain được set bằng True, Broker sẽ lưu trữ bản tin cuối cùng của topic đó. Khi một subscriber mới đăng ký topic đó, Broker sẽ lập tức gửi ngay bản tin lưu trữ này xuống, giúp subscriber mới cập nhật ngay trạng thái hiện tại của thiết bị mà không cần chờ thiết bị phát báo cáo chu kỳ tiếp theo.
-
-\textbf{Last Will and Testament (LWT - Di chúc):} LWT cho phép một client khi kết nối với Broker đăng ký một bản tin mặc định cùng topic tương ứng. Nếu client bị ngắt kết nối đột ngột không mong muốn (ví dụ mất nguồn điện Gateway), Broker sẽ tự động publish bản tin "di chúc" này để thông báo cho hệ thống Cloud biết thiết bị Gateway đã đi vào trạng thái offline.
+MQTT phù hợp với đồ án vì bản tin trạng thái và lệnh điều khiển thường nhỏ, gửi theo sự kiện và cần tách rời Cloud với Gateway. Hạn chế chính là hệ thống phải thiết kế topic và payload rõ ràng. Nếu contract MQTT không ổn định, việc debug và mở rộng hệ thống sẽ khó khăn hơn. Vì vậy, MQTT được xem là contract chính giữa Cloud và Gateway, còn chi tiết topic/payload cụ thể được trình bày ở phần thiết kế và triển khai.
 
 % ========================================
-% 2.6 GIAO TIẾP NỐI TIẾP UART
-% ========================================
-\section{Giao tiếp nối tiếp UART}
-\label{sec:ch2-uart}
+\section{UART, ASH và EZSP giữa Host và EFR32 NCP}
+\label{sec:ch2-uart-ash-ezsp}
 
-UART (Universal Asynchronous Receiver/Transmitter) là giao thức truyền thông nối tiếp bất đồng bộ, sử dụng hai đường dây tín hiệu TX (truyền) và RX (nhận) để thực hiện kết nối vật lý point-to-point trực tiếp giữa host Linux chạy Z3Gateway và chip NCP EFR32MG12 như trong Hình \ref{fig:ch2-uart}.
+Universal Asynchronous Receiver/Transmitter (UART) là chuẩn giao tiếp nối tiếp bất đồng bộ giữa hai thiết bị \cite{uart-adi}. UART thường sử dụng các đường TX, RX và GND; hai bên truyền thông phải thống nhất baud rate, số bit dữ liệu, stop bit và parity. Trong đồ án, UART được xét chủ yếu như đường truyền vật lý/serial giữa Host Gateway và EFR32 NCP, không phải giao thức ứng dụng giữa Gateway và Cloud.
+
+Network Co-Processor (NCP) là mô hình trong đó chip radio xử lý các phần Zigbee network/stack ở mức thấp hơn, còn Host chạy ứng dụng Gateway ở mức cao hơn. Host và NCP cần một cơ chế trao đổi lệnh, sự kiện và dữ liệu. Với nền tảng Silicon Labs, EmberZNet Serial Protocol (EZSP) và Asynchronous Serial Host (ASH) được dùng để hỗ trợ giao tiếp giữa Host và NCP \cite{silabs-ezsp,silabs-z3gateway}.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.55\textwidth]{Images/UART.png}
-    \caption{Kết nối UART vật lý giữa Host và NCP}
+    \includegraphics[width=0.72\textwidth]{Images/UART.png}
+    \caption{Minh họa giao tiếp UART giữa hai thành phần phần cứng}
     \label{fig:ch2-uart}
 \end{figure}
 
-Giao tiếp UART bất đồng bộ yêu cầu hai bên thống nhất cấu hình tốc độ truyền (Baud rate), bit dữ liệu, bit dừng (Stop bit) và bit kiểm tra chẵn lẻ (Parity). Trong đồ án, UART kết nối Host-NCP hoạt động ở baud rate mặc định 115200 bps, kết hợp giao thức ASH (Asynchronous Serial Host) do Silicon Labs đặc tả để đóng khung dữ liệu (framing), kiểm tra lỗi CRC và điều khiển luồng (flow control) nhằm bảo vệ tính toàn vẹn của các khung lệnh EZSP.
+Điểm cần phân biệt là UART/EZSP/ASH thuộc biên giao tiếp giữa Host và NCP, còn application contract của hệ thống nằm ở MQTT và Zigbee/ZCL action mapping. Do đó, các frame UART tự định nghĩa trong tài liệu cũ không nên được xem là contract production hiện tại của đồ án.
+
+Mô hình Host--NCP giúp nhóm thực hiện tận dụng stack Zigbee và phần radio của Silicon Labs, thay vì phải tự xử lý toàn bộ logic mạng ở mức thấp. Hạn chế là quá trình debug cần xem xét thêm lớp serial, EZSP/ASH và tương tác giữa Host với NCP. Phần này được trình bày ở mức vừa đủ để giải thích vì sao Gateway C có thể điều khiển mạng Zigbee thông qua EFR32 NCP.
 
 % ========================================
-% 2.7 PHẦN CỨNG VÀ KIT SỬ DỤNG
+\section{REST API, Cloud Backend và Database}
+\label{sec:ch2-backend-database}
+
+Cloud Backend là lớp phần mềm trung tâm ở phía server. Trong hệ thống Smart Building, Cloud Backend cung cấp REST API cho App, nhận trạng thái từ Gateway, lưu dữ liệu vào database và gửi command xuống Gateway khi người dùng hoặc rule automation yêu cầu. Nhờ có Backend, App không cần làm việc trực tiếp với Zigbee, cluster hoặc NCP.
+
+Representational State Transfer (REST) là phong cách thiết kế API phổ biến trên nền HTTP. App có thể gọi API để lấy danh sách thiết bị, trạng thái hiện tại, lịch sử event hoặc gửi yêu cầu điều khiển. REST dễ triển khai và dễ kiểm thử, phù hợp với các thao tác quản lý thông thường. Hạn chế của REST là mô hình request/response không tối ưu cho cập nhật realtime liên tục nếu dùng một mình; với yêu cầu realtime cao hơn, hệ thống có thể cần thêm WebSocket hoặc cơ chế push.
+
+Database lưu trữ các dữ liệu bền vững của hệ thống. Các nhóm dữ liệu thường gặp gồm device registry, device state, event history, command lifecycle và automation rule. Device registry mô tả thiết bị trong hệ thống. Device state biểu diễn trạng thái hiện tại hoặc lịch sử trạng thái. Event history hỗ trợ truy vết sự kiện. Command lifecycle cho biết lệnh đã được tạo, gửi, xác nhận hay thất bại. Automation rule mô tả điều kiện và hành động tự động.
+
+Trong đồ án, FastAPI được sử dụng cho REST API, SQLAlchemy hỗ trợ Object-Relational Mapping (ORM), PostgreSQL dùng cho dữ liệu production và Paho MQTT giúp Cloud kết nối với broker. Ở Chương 2, nhóm thực hiện chỉ trình bày vai trò của các thành phần này ở mức công nghệ nền; danh sách endpoint, schema chi tiết và xử lý nghiệp vụ được đặt ở các chương sau.
+
+\begin{table}[H]
+\centering
+\caption{Vai trò của các thành phần Cloud trong hệ thống}
+\label{tab:ch2-cloud-components}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.5cm}|>{\raggedright\arraybackslash}p{9.5cm}|}
+\hline
+\textbf{Thành phần} & \textbf{Vai trò lý thuyết} \\ \hline
+REST API & Cung cấp giao diện HTTP để App lấy dữ liệu và gửi yêu cầu điều khiển. \\ \hline
+MQTT Client & Subscribe trạng thái từ Gateway và publish command xuống Gateway. \\ \hline
+Database & Lưu thiết bị, trạng thái, sự kiện, command và automation rule. \\ \hline
+ORM & Ánh xạ giữa object trong code backend và bảng dữ liệu trong database. \\ \hline
+\end{tabular}
+\end{table}
+
 % ========================================
-\section{Phần cứng và Kit phát triển sử dụng}
-\label{sec:ch2-hardware}
+\section{Mobile App và State Management}
+\label{sec:ch2-mobile-state}
 
-Để triển khai các node thiết bị thực tế, đồ án sử dụng bộ công cụ phát triển phần cứng chuyên nghiệp của hãng Silicon Labs.
+Mobile App là lớp tương tác trực tiếp với người dùng cuối. Trong hệ thống Smart Building, người dùng cần xem trạng thái thiết bị, gửi lệnh điều khiển và theo dõi các event hoặc automation rule. App vì vậy chuyển thao tác của người dùng thành request gửi lên Cloud Backend, đồng thời trình bày lại dữ liệu mà Backend cung cấp.
 
-\subsection{Wireless Starter Kit BRD4001A và BRD4162A}
-\label{sec:ch2-starter-kit}
+Flutter là framework UI cross-platform, cho phép xây dựng giao diện trên nhiều nền tảng từ cùng một codebase \cite{flutter-docs}. Trong đồ án, App gọi REST API qua HTTP. Cách tổ chức này giữ App ở lớp người dùng và Cloud, không để App giao tiếp trực tiếp với Zigbee hoặc Gateway. Nhờ đó, App tập trung vào giao diện và trải nghiệm sử dụng, còn Gateway và Cloud xử lý các phần truyền thông thiết bị.
 
-Thiết bị phần cứng cốt lõi được sử dụng là kit phát triển EFR32MG12 2.4 GHz 10 dBm Wireless Starter Kit (WSTK) như được chụp lại trong Hình \ref{fig:ch2-kit-photo}.
+State management là cách App quản lý và cập nhật trạng thái giao diện. Khi danh sách thiết bị, trạng thái đèn hoặc log automation thay đổi, giao diện cần được cập nhật nhất quán. Provider là một cơ chế state management phổ biến trong Flutter, giúp tách dữ liệu/trạng thái khỏi widget hiển thị. Với đồ án này, state management giúp App phản ánh đúng trạng thái thiết bị sau khi người dùng gửi lệnh hoặc khi Gateway báo trạng thái mới.
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.75\textwidth]{Images/Kit.png}
-    \caption{Hình ảnh bộ kit phát triển EFR32MG12 Wireless Starter Kit}
-    \label{fig:ch2-kit-photo}
-\end{figure}
+Ưu điểm của việc để App làm việc qua REST API là kiến trúc rõ ràng và dễ kiểm thử. Hạn chế là cập nhật realtime có thể chưa mượt nếu chỉ dựa vào request/response. Vì vậy, trong phạm vi Chương 2, App được trình bày như lớp monitoring/control cho người dùng; chi tiết màn hình và luồng thao tác được trình bày ở chương thiết kế hoặc triển khai.
 
-Bộ kit phát triển bao gồm hai thành phần bo mạch lắp ghép chính:
-\textbf{Radio Board BRD4162A:} Là bo mạch cắm chứa SoC EFR32MG12P332F1024GL125 chuyên dụng cho truyền thông không dây đa giao thức (Wireless Gecko). Chip bán dẫn này tích hợp lõi vi xử lý ARM Cortex-M4 32-bit tốc độ 40 MHz, dung lượng bộ nhớ Flash 1024 kB phục vụ lưu trữ firmware, bộ nhớ RAM 256 kB và mạch thu phát vô tuyến công suất phát tối đa +10 dBm trên băng tần 2.4 GHz kèm anten mạch in PCB anten tích hợp.
+% ========================================
+\section{Firmware, Bootloader và OTA}
+\label{sec:ch2-firmware-ota}
 
-\textbf{Mainboard BRD4001A:} Là bo mạch mẹ cung cấp mạch nạp Segger J-Link tích hợp để gỡ lỗi mã nguồn, màn hình LCD hiển thị thông tin, cảm biến đo nhiệt độ Si7021, cùng các nút nhấn vật lý (BTN0, BTN1) và đèn LED (LED0, LED1) để lập trình mô phỏng thiết bị.
+Firmware là phần mềm chạy trực tiếp trên thiết bị nhúng. Khác với ứng dụng mobile hoặc backend chạy trên hệ điều hành tổng quát, firmware làm việc gần hơn với phần cứng như radio, GPIO, cảm biến và bộ nhớ flash. Trong hệ thống Zigbee, firmware quyết định thiết bị hoạt động như light, switch, occupancy sensor hay NCP coordinator.
 
-\subsection{Cấu hình phần cứng theo vai trò ứng dụng}
-\label{sec:ch2-hw-mapping}
+Bootloader là chương trình nhỏ chạy trước firmware chính, hỗ trợ nạp, kiểm tra hoặc cập nhật firmware \cite{silabs-ug489}. Trong quá trình phát triển, firmware artifact như file \texttt{.s37} có thể được dùng để flash thiết bị bằng công cụ của Silicon Labs. Artifact không phải là chức năng mà người dùng cuối thao tác trực tiếp, nhưng là đầu ra cần thiết khi build và nạp firmware cho board.
 
-Các board phần cứng EFR32MG12 được lập trình nạp firmware riêng biệt để mô phỏng bốn thành phần vật lý của mạng Zigbee:
-\textbf{Coordinator/NCP Board:} Cắm trực tiếp vào host qua cổng USB để thiết lập kết nối VCOM UART ảo, chạy firmware NCP thuần để làm bộ thu phát sóng Zigbee cho gateway.
+Over-the-Air (OTA) là cơ chế cập nhật firmware qua mạng thay vì flash thủ công qua máy tính \cite{silabs-ota}. Với Zigbee OTA, hệ thống thường cần OTA image, quản lý version, kiểm tra tính toàn vẹn, OTA server/client và quá trình truyền firmware theo từng phần. OTA có ý nghĩa khi số lượng thiết bị tăng lên hoặc thiết bị được lắp ở vị trí khó tiếp cận.
 
-\textbf{Z3Light Board:} Sử dụng LED0 trên Mainboard để mô phỏng trạng thái bóng đèn (LED0 sáng tương ứng đèn ON, LED0 tắt tương ứng đèn OFF).
+OTA cũng làm hệ thống phức tạp hơn vì liên quan đến phân phối firmware, xử lý lỗi cập nhật, kiểm tra version, bảo mật image và khả năng khôi phục khi cập nhật thất bại. Do đó, trong báo cáo này, OTA được trình bày chủ yếu như nền tảng công nghệ và hướng phát triển. Nhóm thực hiện không khẳng định OTA end-to-end đã hoàn chỉnh nếu chưa có bằng chứng triển khai đầy đủ trong các chương sau.
 
-\textbf{Z3Switch Board:} Sử dụng nút nhấn BTN0 trên Mainboard để gửi lệnh Toggle thay đổi trạng thái của đèn qua binding.
+% ========================================
+\section{Security trong Zigbee và IoT}
+\label{sec:ch2-security}
 
-\textbf{Occupancy Sensor Board:} Cấu hình ở chế độ Sleepy End Device chạy nguồn pin, sử dụng nút nhấn BTN0 để mô phỏng sự kiện cảm biến phát hiện có người di chuyển.
+Security trong hệ thống IoT cần được xem xét ở nhiều lớp, từ thiết bị, mạng Zigbee, Gateway, MQTT Broker, Cloud Backend, Database đến App. Với Smart Building, sự cố bảo mật có thể dẫn đến mất dữ liệu hoặc làm sai lệch hành vi điều khiển thiết bị vật lý. Vì vậy, báo cáo cần nêu các nguyên tắc bảo mật cơ bản trước khi đi vào phần thiết kế hệ thống.
+
+Ở lớp Zigbee, các khái niệm cần chú ý gồm network key, application security và Trust Center. Network key giúp bảo vệ truyền thông trong cùng một mạng Zigbee. Trust Center liên quan đến việc quản lý thiết bị tham gia mạng và phân phối khóa trong một số mô hình bảo mật. Khi thiết bị join mạng, hệ thống cần kiểm soát thiết bị nào được phép tham gia và quá trình trao đổi khóa được thực hiện như thế nào.
+
+Ở lớp MQTT và Cloud, broker cần có authentication, phân quyền topic và trong môi trường production nên cân nhắc Transport Layer Security (TLS). Cloud Backend cần kiểm soát quyền truy cập API, kiểm tra dữ liệu đầu vào và bảo vệ database. App cũng cần xử lý token hoặc thông tin đăng nhập cẩn thận để tránh người dùng không hợp lệ gửi command điều khiển thiết bị.
+
+Firmware security là lớp bảo mật quan trọng khác. Firmware signing giúp giảm rủi ro thiết bị nhận firmware giả mạo. Với OTA, yêu cầu bảo mật còn cao hơn vì firmware được truyền qua mạng. Tuy nhiên, các cơ chế như install-code Trust Center join, APS encryption hardening, GBL signing hoặc MQTT mTLS chỉ được xem là nền tảng hoặc hướng phát triển nếu chưa có bằng chứng hoàn thiện trong hệ thống hiện tại.
+
+Việc tăng cường security giúp hệ thống an toàn hơn nhưng cũng làm quá trình triển khai, vận hành và debug phức tạp hơn. Vì vậy, đồ án cần trình bày đúng phạm vi: nêu nguyên tắc bảo mật nền tảng, chỉ khẳng định những phần có evidence, và đưa các cơ chế nâng cao vào hướng phát triển khi chưa triển khai đầy đủ.
+
+% ========================================
+\section{Công nghệ sử dụng trong đồ án}
+\label{sec:ch2-tech-summary}
+
+Các công nghệ trong đồ án được tổ chức theo kiến trúc nhiều lớp. Thiết bị Zigbee nằm ở tầng nhúng và mạng cục bộ. Gateway chịu trách nhiệm chuyển đổi giữa Zigbee và MQTT. MQTT Broker làm trung gian messaging. Cloud Backend quản lý dữ liệu và API. Mobile App là giao diện cho người dùng cuối. Cách chia lớp này giúp hệ thống dễ giải thích, dễ kiểm thử theo từng phần và thuận lợi hơn khi mở rộng.
+
+\begin{table}[H]
+\centering
+\caption{Tóm tắt công nghệ nền được sử dụng trong đồ án}
+\label{tab:ch2-tech-stack}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{2.8cm}|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{6.2cm}|}
+\hline
+\textbf{Lớp} & \textbf{Công nghệ} & \textbf{Vai trò trong hệ thống} \\ \hline
+Device & EFR32, EmberZNet/Gecko SDK, Zigbee stack & Chạy firmware cho light, switch, occupancy sensor hoặc NCP. \\ \hline
+Gateway & Z3GatewayHost, C, \texttt{libmosquitto} & Kết nối Zigbee local network với MQTT/Cloud. \\ \hline
+Broker & Eclipse Mosquitto & Trung gian publish/subscribe giữa Cloud và Gateway. \\ \hline
+Backend & FastAPI, SQLAlchemy, Paho MQTT & Cung cấp REST API, xử lý MQTT và quản lý dữ liệu/lệnh. \\ \hline
+Database & PostgreSQL, SQLite trong một số ngữ cảnh test & Lưu thiết bị, trạng thái, sự kiện, command và automation. \\ \hline
+App & Flutter, Dart, Provider, HTTP & Giao diện monitoring/control cho người dùng cuối. \\ \hline
+\end{tabular}
+\end{table}
+
+Tóm lại, Chương 2 cung cấp phần cơ sở để người đọc hiểu các lựa chọn kỹ thuật chính của đồ án: Zigbee cho mạng thiết bị, Z3Gateway C cho lớp kết nối với coordinator radio, MQTT cho trao đổi trạng thái/lệnh, REST API và database cho lớp Cloud, Flutter cho giao diện người dùng. Các khái niệm này là tiền đề cho phần phân tích yêu cầu, thiết kế kiến trúc, triển khai và đánh giá ở các chương tiếp theo.
