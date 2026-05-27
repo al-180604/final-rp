@@ -1,296 +1,555 @@
-% ========================================
-% CHƯƠNG 3: PHÂN TÍCH YÊU CẦU VÀ THIẾT KẾ HỆ THỐNG
-% ========================================
 \chapter{PHÂN TÍCH YÊU CẦU VÀ THIẾT KẾ HỆ THỐNG}
 \label{ch:thietke}
 
-% ----- TÓM TẮT CHƯƠNG -----
-\vspace{0.5cm}
-\noindent\textit{Chương này tập trung trình bày các kết quả phân tích yêu cầu chức năng, phi chức năng và thiết kế kiến trúc cho toàn bộ hệ thống Smart Building Platform. Nội dung chi tiết bao gồm mô hình kiến trúc phân lớp, các luồng dữ liệu Uplink/Downlink, thiết kế mô hình dữ liệu thiết bị, thiết kế cấu trúc cơ sở dữ liệu, đặc tả giao diện REST API và đặc tả hợp đồng bản tin MQTT Contract, cùng phân tích các quyết định trade-off thiết kế quan trọng.}
-\vspace{0.5cm}
+Sau phần cơ sở lý thuyết, chương này chuyển sang mô tả hệ thống trong phạm vi đồ án. 
+Hiện tại, hệ thống được triển khai theo tuyến điều khiển Cloud-to-Gateway. Ứng dụng di động Flutter gửi yêu cầu qua REST API tới Cloud Backend FastAPI. Cloud lưu dữ liệu bằng PostgreSQL, phát lệnh qua MQTT Broker Mosquitto, sau đó Gateway Z3GatewayHost viết bằng C nhận lệnh bằng thư viện libmosquitto và chuyển xuống mạng Zigbee thông qua EFR32 NCP. Các thiết bị Zigbee cuối gồm đèn, công tắc và cảm biến chuyển động.
 
-% ========================================
-% 3.1 PHÂN TÍCH YÊU CẦU
-% ========================================
+\section{Phạm vi và giả định thiết kế}
+\label{sec:ch3-scope}
+
+Phần thiết kế của đồ án tập trung vào một hệ thống Smart Building quy mô nhỏ. Hệ thống cần cho phép người dùng theo dõi trạng thái thiết bị, điều khiển đèn, xem sự kiện và cấu hình một phần automation rule. Các chức năng được mô tả trong chương này bám theo những thành phần đã có trong mã nguồn, không mở rộng sang các phần chưa có bằng chứng triển khai.
+
+Một số khái niệm cơ bản:
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Contract (hợp đồng dữ liệu):} quy ước giữa các module, ví dụ topic MQTT, cấu trúc JSON, REST request và response.
+    \item \textbf{Reported state (trạng thái báo cáo):} trạng thái do thiết bị hoặc Gateway gửi lên Cloud, ví dụ đèn đang bật, mức sáng hiện tại, thiết bị còn reachable hay không.
+    \item \textbf{Command lifecycle (vòng đời lệnh):} các bước một lệnh đi qua từ lúc Mobile tạo lệnh, Cloud lưu lệnh, Gateway nhận lệnh, gửi xuống Zigbee và trả kết quả.
+\end{itemize}
+
+Bảng \ref{tab:ch3-scope-boundary} tóm tắt phạm vi được dùng khi viết chương này.
+
+\begin{table}[H]
+    \centering
+    \caption{Phạm vi thiết kế trong đồ án}
+    \label{tab:ch3-scope-boundary}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{5.2cm}|>{\raggedright\arraybackslash}p{4.8cm}|}
+        \hline
+        \textbf{Nhóm chức năng} & \textbf{Được mô tả trong chương} & \textbf{Không khẳng định trong phạm vi hiện tại} \\
+        \hline
+        Điều khiển thiết bị & Điều khiển đèn qua Mobile, REST API, MQTT và Gateway Zigbee. & Không xem công tắc và cảm biến chuyển động là thiết bị có thể nhận lệnh trực tiếp. \\
+        \hline
+        Theo dõi trạng thái & Lưu và hiển thị reported state, registry, event và gateway health. & Không khẳng định mọi loại telemetry đều đã hoàn chỉnh cho sản phẩm thương mại. \\
+        \hline
+        Automation & Cloud có CRUD automation rule và publish desired automation. Gateway có rule engine local cho switch-to-light khi bật cấu hình môi trường. & Không khẳng định Cloud-created automation đã được Gateway tự động áp dụng end-to-end. \\
+        \hline
+        Bảo mật & MQTT Broker có username/password và ACL. & Không khẳng định đã có mTLS, multi-user auth hoàn chỉnh hoặc install-code commissioning. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
+
 \section{Phân tích yêu cầu hệ thống}
 \label{sec:ch3-yeucau}
 
-Để xây dựng một hệ thống IoT hoàn chỉnh hoạt động ổn định và có thể mở rộng, trước tiên cần phân tích các yêu cầu chức năng và phi chức năng cốt lõi.
+\subsection{Tác nhân sử dụng hệ thống}
+\label{sec:ch3-actors}
+
+Hệ thống có ba nhóm tác nhân chính. Người dùng thao tác qua Mobile App. Cloud Backend tiếp nhận request, lưu dữ liệu và làm cầu nối với MQTT Broker. Gateway là tác nhân kỹ thuật nằm gần mạng Zigbee, chịu trách nhiệm nhận lệnh MQTT và phát lệnh xuống thiết bị.
+
+\begin{table}[H]
+    \centering
+    \caption{Các tác nhân chính trong hệ thống}
+    \label{tab:ch3-actors}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{6.1cm}|>{\raggedright\arraybackslash}p{4.6cm}|}
+        \hline
+        \textbf{Tác nhân} & \textbf{Vai trò} & \textbf{Giao tiếp chính} \\
+        \hline
+        Người dùng Mobile & Xem dashboard, xem danh sách thiết bị, điều khiển đèn, xem event log và thao tác automation rule. & REST API tới Cloud Backend. \\
+        \hline
+        Cloud Backend & Quản lý thiết bị, trạng thái, lệnh, sự kiện và automation. Thành phần này cũng publish/subcribe MQTT để trao đổi với Gateway. & REST, PostgreSQL, MQTT. \\
+        \hline
+        Gateway Z3GatewayHost & Nhận MQTT command, đưa lệnh vào queue, xử lý trong vòng lặp chính và gọi Zigbee stack để điều khiển thiết bị. & MQTT qua libmosquitto, Zigbee qua EFR32 NCP. \\
+        \hline
+        Thiết bị Zigbee & Đèn báo cáo trạng thái và nhận lệnh On/Off. Công tắc phát sự kiện toggle. Cảm biến chuyển động báo occupancy. & Zigbee Cluster Library. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
 
 \subsection{Yêu cầu chức năng}
 \label{sec:ch3-yeucau-chucnang}
 
-Hệ thống được thiết kế để đáp ứng các yêu cầu chức năng chính được phân lớp rõ ràng, tóm tắt trong Bảng \ref{tab:ch3-func-req}.
+Các yêu cầu chức năng được rút ra từ đường chạy hiện tại của hệ thống. Bảng \ref{tab:ch3-func-req} dùng mã FR để thuận tiện đối chiếu khi thiết kế API, cơ sở dữ liệu và MQTT contract.
 
 \begin{table}[H]
-\centering
-\caption{Các yêu cầu chức năng chính của hệ thống}
-\label{tab:ch3-func-req}
-\begin{tabular}{|p{3cm}|p{3.5cm}|p{8cm}|}
-\hline
-\textbf{Nhóm tính năng} & \textbf{Yêu cầu chức năng} & \textbf{Mô tả chi tiết} \\ \hline
-\multirow{2}{*}{Quản lý thiết bị} & Gia nhập mạng Zigbee & Cho phép thiết bị Zigbee mới gia nhập vào mạng thông qua việc kích hoạt mở permit-join từ xa. \\ \cline{2-3} 
- & Quản lý danh mục & Quản lý thông tin tổ chức tòa nhà (nhà, phòng) và danh sách thiết bị logic qua REST API. \\ \hline
-\multirow{2}{*}{\parbox{2.8cm}{Giám sát \&\\ Điều khiển}} & Báo cáo trạng thái & Cập nhật và lưu trữ trạng thái thực tế (reported state) của thiết bị lên Cloud khi có thay đổi. \\ \cline{2-3} 
- & Điều khiển phụ tải & Cho phép gửi lệnh bật/tắt thiết bị đèn từ Cloud xuống mạng Zigbee thông qua Gateway. \\ \hline
-\multirow{2}{*}{Tự động hóa} & Liên kết trực tiếp & Cho phép công tắc điều khiển đèn cục bộ thông qua cơ chế binding lớp vô tuyến của Zigbee. \\ \cline{2-3} 
- & Theo dõi vòng đời lệnh & Theo dõi trạng thái lệnh qua các pha (accepted, queued, sent, executed, failed, timeout). \\ \hline
-\end{tabular}
+    \centering
+    \caption{Các yêu cầu chức năng chính}
+    \label{tab:ch3-func-req}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{1.4cm}|>{\raggedright\arraybackslash}p{8.0cm}|>{\raggedright\arraybackslash}p{4.6cm}|}
+        \hline
+        \textbf{Mã} & \textbf{Yêu cầu} & \textbf{Ghi chú thiết kế} \\
+        \hline
+        FR-01 & Người dùng xem được danh sách thiết bị, thông tin phòng và trạng thái mới nhất của từng thiết bị. & Dữ liệu lấy từ Cloud qua REST API. \\
+        \hline
+        FR-02 & Người dùng điều khiển bật/tắt đèn từ Mobile App. & Lệnh đi qua Cloud, MQTT Broker, Gateway rồi tới mạng Zigbee. \\
+        \hline
+        FR-03 & Gateway gửi reported state, registry, event và health lên Cloud. & Các bản tin uplink đi qua MQTT. \\
+        \hline
+        FR-04 & Cloud lưu command, state, event và automation rule để Mobile truy vấn lại. & PostgreSQL là nơi lưu trữ chính. \\
+        \hline
+        FR-05 & Người dùng xem được event log và trạng thái xử lý command. & Mobile có cơ chế polling command sau khi gửi lệnh. \\
+        \hline
+        FR-06 & Người dùng tạo, sửa, bật/tắt và xóa automation rule ở phía Cloud. & Rule được lưu ở Cloud và publish lên desired automation topic; Gateway hiện chưa tự động consume topic này. \\
+        \hline
+        FR-07 & Hệ thống hỗ trợ mở/đóng commissioning và rediscover thiết bị qua Gateway API. & Đây là lệnh Gateway-level, không phải lệnh điều khiển trực tiếp một thiết bị cụ thể. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
 \end{table}
-
-\noindent Chi tiết các yêu cầu chức năng trong Bảng \ref{tab:ch3-func-req} làm định hướng để thiết kế cấu trúc cơ sở dữ liệu và các API endpoints tương ứng tại các mục tiếp theo.
 
 \subsection{Yêu cầu phi chức năng}
 \label{sec:ch3-yeucau-phichucnang}
 
-Hệ thống phải đảm bảo các tiêu chí kỹ thuật vận hành phi chức năng sau:
+Yêu cầu phi chức năng trong đồ án được đặt ở mức phù hợp với hệ thống thử nghiệm. Các tiêu chí này dùng để định hướng thiết kế, không được hiểu là số đo đã kiểm chứng trên môi trường sản xuất.
 
-\textbf{Độ trễ phản hồi (Latency):} Thời gian xử lý lệnh từ lúc client gọi API gửi lệnh điều khiển cho tới khi nhận được phản hồi trạng thái từ thiết bị đèn thực tế qua Gateway phải nằm trong ngưỡng cho phép (dưới 2 giây trong điều kiện mạng ổn định).
+\begin{table}[H]
+    \centering
+    \caption{Các yêu cầu phi chức năng}
+    \label{tab:ch3-nonfunc-req}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.4cm}|>{\raggedright\arraybackslash}p{7.0cm}|>{\raggedright\arraybackslash}p{3.6cm}|}
+        \hline
+        \textbf{Tiêu chí} & \textbf{Yêu cầu thiết kế} & \textbf{Cách đáp ứng trong hệ thống} \\
+        \hline
+        Độ trễ thao tác & Lệnh bật/tắt đèn cần đi qua ít tầng trung gian nhất có thể trong mô hình Cloud-to-Gateway. & Mobile gửi REST command, Cloud publish MQTT, Gateway xử lý queue và gọi Zigbee stack. \\
+        \hline
+        Tính nhất quán dữ liệu & Trạng thái hiển thị trên Mobile phải dựa trên reported state từ Gateway thay vì chỉ dựa vào thao tác người dùng. & Gateway publish reported state retained; Cloud lưu device state. \\
+        \hline
+        Khả năng quan sát & Người vận hành cần biết Gateway online, health và command reply. & Gateway publish online, health, event và command reply qua MQTT. \\
+        \hline
+        An toàn truy cập & MQTT Broker cần tách quyền publish/subscribe theo cấu hình broker. & Mosquitto dùng username/password và ACL. \\
+        \hline
+        Dễ bảo trì & Các tầng Mobile, Cloud, Broker, Gateway và firmware nên tách trách nhiệm rõ ràng. & Cloud dùng FastAPI router; Gateway tách MQTT, parser, dispatcher, light/switch logic và rule engine. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
 
-\textbf{Khả năng hoạt động độc lập (Offline Capability):} Khi mất kết nối internet lên Cloud Backend, các kịch bản tự động hóa cục bộ (công tắc bật/tắt đèn qua local binding) phải hoạt động bình thường nhờ logic xử lý trọn vẹn trong mạng mesh Zigbee.
-
-\textbf{Giới hạn thời gian (Timeout):} Thời gian chờ phản hồi tối đa của lệnh điều khiển thiết bị được thiết lập cố định là 5000 ms để tránh tình trạng lệnh bị treo vô hạn trong cơ sở dữ liệu.
-
-\textbf{Bảo mật phân quyền (Least Privilege):} Broker Mosquitto phải cấu hình kiểm soát truy cập (ACL) phân tách rõ ràng quyền đọc/ghi của các tài khoản (gateway, client, monitor) để tránh lộ thông tin và can thiệp lệnh trái phép.
-
-% ========================================
-% 3.2 KIẾN TRÚC TỔNG THỂ HỆ THỐNG
-% ========================================
 \section{Kiến trúc tổng thể hệ thống}
 \label{sec:ch3-kientruc}
 
-Hệ thống được thiết kế theo mô hình kiến trúc phân lớp hướng dịch vụ để phân tách rõ ràng trách nhiệm của từng thành phần. Hình \ref{fig:ch3-architecture} mô tả cấu trúc 4 lớp chính của hệ thống.
+Kiến trúc runtime hiện tại gồm năm lớp: Mobile App, Cloud Backend, MQTT Broker, Gateway và mạng Zigbee. Docker compose production chứa các service Cloud API, Mosquitto và PostgreSQL. Mobile App và Gateway không nằm trong compose này; chúng chạy như thành phần riêng và kết nối vào Cloud/Broker qua network.
 
 \begin{figure}[H]
     \centering
-    % Thay hình kiến trúc Smart Home end-to-end
-    % \includegraphics[width=0.9\textwidth]{Images/System_Architecture_SmartHome.png}
-    \caption{Sơ đồ kiến trúc tổng quan hệ thống Smart Building}
-    \label{fig:ch3-architecture}
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[font=\small, >=stealth]
+        \tikzstyle{block}=[draw, rounded corners, align=center, minimum width=2.7cm, minimum height=1.0cm]
+        \node[block] (mobile) at (0,0) {Mobile App\\Flutter + Provider};
+        \node[block] (cloud) at (5.0,0) {Cloud Backend\\FastAPI + SQLAlchemy};
+        \node[block] (db) at (5.0,-2.2) {PostgreSQL\\device, state, event, command};
+        \node[block] (mqtt) at (10.0,0) {MQTT Broker\\Mosquitto};
+        \node[block] (gw) at (15.0,0) {Gateway\\Z3GatewayHost C};
+        \node[block] (ncp) at (19.5,0) {EFR32 NCP\\Zigbee Coordinator};
+        \node[block] (dev) at (24.0,0) {Zigbee Devices\\light, switch, motion};
+
+        \draw[->, thick] (mobile) -- node[above, font=\scriptsize]{REST API} (cloud);
+        \draw[<->, thick] (cloud) -- node[right, font=\scriptsize]{ORM} (db);
+        \draw[<->, thick] (cloud) -- node[above, font=\scriptsize]{MQTT} (mqtt);
+        \draw[<->, thick] (mqtt) -- node[above, font=\scriptsize]{MQTT} (gw);
+        \draw[<->, thick] (gw) -- node[above, font=\scriptsize]{UART} (ncp);
+        \draw[<->, thick] (ncp) -- node[above, font=\scriptsize]{ZCL} (dev);
+    \end{tikzpicture}}
+    \caption{Kiến trúc runtime của hệ thống Smart Building trong đồ án}
+    \label{fig:ch3-runtime-architecture}
 \end{figure}
 
-Kiến trúc hệ thống bao gồm bốn lớp vật lý chính phối hợp hoạt động:
-
-\textbf{Lớp Thiết bị (Device Layer):} Gồm các nút thiết bị Zigbee 3.0 (Z3Light, Z3Switch, Occupancy Sensor) giao tiếp không dây với Coordinator.
-
-\textbf{Lớp Gateway trung gian (Gateway Layer):} Gồm phần cứng host nhúng chạy hệ điều hành Linux và ứng dụng native C Z3Gateway. Ứng dụng này sử dụng chip NCP qua UART/ASH để điều khiển mạng Zigbee, đồng thời kết nối trực tiếp lên MQTT Broker. Bảng \ref{tab:ch3-gateway-modules} liệt kê vai trò của các module mã nguồn tự thiết kế trong Z3Gateway.
-
-\textbf{Lớp Trung chuyển (Message Broker):} Mosquitto MQTT Broker làm trung gian điều phối bản tin, hỗ trợ ACL bảo mật và cơ chế cầu nối (bridge) truyền thông.
-
-\textbf{Lớp Dịch vụ đám mây (Cloud Layer):} Chứa dịch vụ Cloud Backend xây dựng trên framework FastAPI kết nối cơ sở dữ liệu PostgreSQL để lưu trữ trạng thái lâu bền và expose hệ thống REST API phục vụ người dùng.
+Trong kiến trúc này, Cloud không điều khiển trực tiếp thiết bị Zigbee. Cloud tạo command và phát bản tin MQTT. Gateway mới là nơi hiểu phần Zigbee runtime, ví dụ mapping command sang cluster On/Off, đẩy lệnh xuống EFR32 NCP và gửi command reply ngược lại Cloud.
 
 \begin{table}[H]
-\centering
-\caption{Các module logic chính trong ứng dụng Z3Gateway C}
-\label{tab:ch3-gateway-modules}
-\begin{tabular}{|l|p{9.5cm}|}
-\hline
-\textbf{Tên module} & \textbf{Vai trò và nhiệm vụ kỹ thuật} \\ \hline
-\texttt{app\_mqtt.c/h} & Khởi tạo client MQTT kết nối Broker, xử lý đăng ký nhận và phát bản tin. \\ \hline
-\texttt{cmd\_handler.c/h} & Phân tích cấu trúc envelope JSON của lệnh, dispatch lệnh tới module phần cứng. \\ \hline
-\texttt{device\_registry.c/h} & Quản lý bảng lưu trữ thông tin thiết bị trong bộ nhớ RAM tạm thời (eui64, 16-bit nwk\_addr). \\ \hline
-\texttt{light\_ctrl.c/h} & Tạo các khung tin nhắn ZCL On/Off gửi xuống Coordinator để bật/tắt đèn. \\ \hline
-\texttt{telemetry\_rx.c/h} & Bắt các callback báo cáo thuộc tính ZCL từ NCP, chuyển đổi thành JSON reported. \\ \hline
-\texttt{net\_mgr.c/h} & Quản lý quá trình khởi tạo mạng Zigbee và mở cửa sổ cho phép thiết bị join. \\ \hline
-\end{tabular}
+    \centering
+    \caption{Trách nhiệm của các khối chính}
+    \label{tab:ch3-component-responsibility}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.4cm}|>{\raggedright\arraybackslash}p{7.0cm}|>{\raggedright\arraybackslash}p{3.6cm}|}
+        \hline
+        \textbf{Khối} & \textbf{Trách nhiệm chính} & \textbf{Dữ liệu ra/vào} \\
+        \hline
+        Mobile App & Giao diện thao tác thiết bị, event, automation và settings. & REST request/response. \\
+        \hline
+        Cloud Backend & Xử lý REST API, lưu dữ liệu, publish command, subscribe reported state, event, registry và health. & JSON qua REST, MQTT envelope, bản ghi PostgreSQL. \\
+        \hline
+        MQTT Broker & Trung gian truyền bản tin giữa Cloud và Gateway. & Topic prefix: \newline \texttt{sb/v1/\{tenant\}/} \newline \texttt{\{site\}/} \newline \texttt{\{gateway\}}. \\
+        \hline
+        Gateway Host & Nhận command, parse contract, route lệnh tới module phù hợp, publish reply và telemetry. & MQTT, command queue, Zigbee API. \\
+        \hline
+        Zigbee Devices & Thực hiện lệnh và báo cáo trạng thái/sự kiện. & ZCL command, ZCL report. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
 \end{table}
 
-\noindent Sự phân chia rõ ràng các module trong Bảng \ref{tab:ch3-gateway-modules} đảm bảo tính mô-đun hóa cao, giúp Z3Gateway chạy ổn định dưới dạng một single-process C gọn nhẹ.
+\section{Thiết kế thiết bị và trạng thái}
+\label{sec:ch3-device-state-design}
 
-% ========================================
-% 3.3 THIẾT KẾ MẠNG VÀ VAI TRÒ THIẾT BỊ
-% ========================================
-\section{Thiết kế mạng và Vai trò thiết bị}
-\label{sec:ch3-device-design}
+\subsection{Device model}
+\label{sec:ch3-device-model}
 
-Mạng Zigbee cục bộ sử dụng mô hình mesh-tree phân cấp. Coordinator đóng vai trò Trust Center duy nhất để quản lý bảo mật mạng, các node Z3Light và Z3Switch hoạt động dưới vai trò Router giúp chuyển tiếp gói tin, cảm biến chuyển động hoạt động dưới vai trò End Device tiết kiệm pin. Bảng \ref{tab:ch3-device-roles} mô tả chi tiết sự ánh xạ giữa loại thiết bị và các cluster ZCL tương ứng được cấu hình.
+Device model của hệ thống hiện tại dùng các loại thiết bị \texttt{light}, \texttt{switch}, \texttt{motion} và \texttt{unknown}. Điểm dễ nhầm là firmware cảm biến có tên Occupancy Sensor, nhưng khi đi qua Gateway/Cloud/Mobile, loại thiết bị được chuẩn hóa là \texttt{motion}. Vì vậy trong chương này không dùng \texttt{occupancy\_sensor} như một device type runtime.
 
 \begin{table}[H]
-\centering
-\caption{Bảng ánh xạ device type và các cluster ZCL cấu hình}
-\label{tab:ch3-device-roles}
-\begin{tabular}{|l|l|l|l|}
-\hline
-\textbf{Loại thiết bị} & \textbf{Zigbee Role} & \textbf{Server Clusters} & \textbf{Client Clusters} \\ \hline
-Coordinator / NCP & ZC (Coordinator) & -- & On/Off (0x0006) \\ \hline
-Light Device & ZR (Router) & On/Off (0x0006) & -- \\ \hline
-Switch Device & ZR (Router) & -- & On/Off (0x0006) \\ \hline
-Occupancy Sensor & ZED (End Device) & Occupancy Sensing (0x0406) & -- \\ \hline
-\end{tabular}
+    \centering
+    \caption{Ánh xạ loại thiết bị và chức năng runtime}
+    \label{tab:ch3-device-roles}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{2.1cm}|>{\raggedright\arraybackslash}p{3.5cm}|>{\raggedright\arraybackslash}p{4.1cm}|>{\raggedright\arraybackslash}p{3.6cm}|}
+        \hline
+        \textbf{Device type} & \textbf{Vai trò} & \textbf{State/Event chính} & \textbf{Command hỗ trợ} \\
+        \hline
+        \texttt{light} & Thiết bị chấp hành, nhận lệnh bật/tắt. & \texttt{power}, \texttt{level}, \texttt{reachable}. & \texttt{on}, \texttt{off} end-to-end. \texttt{set\_level} có trong schema nhưng Gateway hiện chưa xử lý hoàn chỉnh. \\
+        \hline
+        \texttt{switch} & Thiết bị phát sự kiện điều khiển cục bộ. & Event \texttt{toggle}; schema có thể lưu \texttt{reachable}, \texttt{battery}. & Không commandable trong Gateway hiện tại. \\
+        \hline
+        \texttt{motion} & Cảm biến chuyển động/occupancy. & \texttt{occupancy} với trạng thái \texttt{occupied} hoặc \texttt{unoccupied} khi có event phù hợp. & Không có lệnh điều khiển trực tiếp. \\
+        \hline
+        \texttt{unknown} & Thiết bị chưa phân loại được khi discovery. & Registry metadata nếu có. & Không dùng cho điều khiển. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
 \end{table}
 
-\noindent Cấu hình cluster trong Bảng \ref{tab:ch3-device-roles} đảm bảo các thiết bị chỉ thực hiện các chức năng tối thiểu theo đúng thiết kế của Silicon Labs để tiết kiệm bộ nhớ flash của chip.
+\subsection{State, event và command}
+\label{sec:ch3-state-event-command}
 
-% ========================================
-% 3.4 LUỒNG DỮ LIỆU CHÍNH (DATA FLOW)
-% ========================================
-\section{Luồng dữ liệu chính trong hệ thống}
+Hệ thống tách ba loại dữ liệu để tránh lẫn giữa trạng thái hiện tại, sự kiện tức thời và yêu cầu điều khiển:
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{State:} ảnh chụp trạng thái gần nhất của thiết bị. Ví dụ đèn có \texttt{power=on}, \texttt{level=100}, \texttt{reachable=true}.
+    \item \textbf{Event:} sự kiện xảy ra tại một thời điểm. Ví dụ công tắc phát \texttt{toggle} hoặc cảm biến báo \texttt{occupancy\_changed}.
+    \item \textbf{Command:} yêu cầu điều khiển do người dùng hoặc hệ thống tạo ra. Ví dụ Mobile yêu cầu bật đèn.
+\end{itemize}
+
+Cách tách này giúp Cloud không phải suy đoán trạng thái thiết bị chỉ từ thao tác trên Mobile. Sau khi gửi command, Mobile vẫn cần lấy lại command status hoặc chờ reported state mới để hiển thị đúng hơn.
+
+\section{Luồng dữ liệu chính}
 \label{sec:ch3-dataflow}
 
-Hệ thống được thiết kế dựa trên hai luồng truyền dẫn dữ liệu hai chiều Uplink và Downlink cốt lõi, cùng luồng tự động hóa cục bộ độc lập.
-
-\subsection{Luồng báo cáo trạng thái (Uplink Flow)}
+\subsection{Luồng uplink: thiết bị báo cáo lên Cloud}
 \label{sec:ch3-dataflow-uplink}
 
-Uplink flow đảm nhận việc đồng bộ trạng thái thực tế của thiết bị vật lý lên cơ sở dữ liệu Cloud gần thời gian thực. Hình \ref{fig:ch3-uplink} mô tả chi tiết đường đi của dòng dữ liệu từ cảm biến lên giao diện giám sát.
+Uplink là chiều dữ liệu từ mạng Zigbee đi lên Cloud. Đèn gửi ZCL report, công tắc gửi event, cảm biến motion gửi thay đổi occupancy. Gateway nhận các thông tin này, chuẩn hóa thành MQTT payload và publish lên Broker. Cloud subscribe các topic tương ứng, cập nhật database và cung cấp lại dữ liệu cho Mobile qua REST API.
 
 \begin{figure}[H]
     \centering
-    % Thay hình uplink flow phù hợp kiến trúc NCP + MQTT
-    % \includegraphics[width=0.85\textwidth]{Images/Up_stream_SmartHome.png}
-    \caption{Sơ đồ luồng dữ liệu Uplink đồng bộ trạng thái}
-    \label{fig:ch3-uplink}
+    \resizebox{0.96\textwidth}{!}{%
+    \begin{tikzpicture}[font=\small, >=stealth]
+        \tikzstyle{flowbox}=[draw, rounded corners, align=center, minimum width=2.5cm, minimum height=0.95cm]
+        \node[flowbox] (dev) at (0,0) {Zigbee Device\\ZCL report/event};
+        \node[flowbox] (gw) at (4.5,0) {Gateway\\normalize payload};
+        \node[flowbox] (broker) at (9.5,0) {Mosquitto\\topic routing};
+        \node[flowbox] (cloud) at (14.5,0) {Cloud MQTT Client\\update model};
+        \node[flowbox] (db) at (19.0,0) {PostgreSQL\\state/event};
+        \node[flowbox] (mobile) at (23.5,0) {Mobile\\REST query};
+
+        \draw[->, thick] (dev) -- node[above, font=\scriptsize]{ZCL} (gw);
+        \draw[->, thick] (gw) -- node[above, font=\scriptsize, align=center]{reported/event/\\registry} (broker);
+        \draw[->, thick] (broker) -- node[above, font=\scriptsize]{subscribe} (cloud);
+        \draw[->, thick] (cloud) -- node[above, font=\scriptsize]{persist} (db);
+        \draw[->, thick] (mobile) to[bend left=25] node[below, font=\scriptsize, align=center]{GET devices/\\state/events} (cloud);
+    \end{tikzpicture}}
+    \caption{Luồng uplink đồng bộ trạng thái và sự kiện}
+    \label{fig:ch3-uplink-flow}
 \end{figure}
 
-Quá trình truyền dẫn Uplink diễn ra theo các bước tuần tự sau:
+Các bản tin reported state, registry và gateway health được thiết kế theo hướng giữ lại bản tin mới nhất trên Broker bằng retain flag ở phía Gateway. Với event và command reply, hệ thống không dùng retained message vì đây là dữ liệu theo thời điểm.
 
-\textbf{Bước 1 -- Gửi báo cáo từ thiết bị:} Thiết bị Zigbee (Light/Sensor) gửi bản tin báo cáo thuộc tính ZCL Attribute Report lên Coordinator.
-
-\textbf{Bước 2 -- Nhận và chuyển đổi tại Coordinator:} Coordinator nhận được gói tin vô tuyến, chuyển đổi thành khung tin nhắn EZSP truyền qua UART/ASH nối tiếp lên Host Gateway.
-
-\textbf{Bước 3 -- Xử lý và publish tại Gateway:} Module \texttt{telemetry\_rx.c} trên Z3Gateway bắt phản hồi dữ liệu, phân tích giá trị nhị phân thành định dạng trạng thái tương ứng, sau đó chuyển cho module \texttt{app\_mqtt.c} để xuất bản tin nhắn được báo cáo lên MQTT Broker.
-
-\textbf{Bước 4 -- Đăng ký và lưu trữ tại Cloud:} Cloud Backend đăng kí chủ đề được báo cáo qua MQTT client chạy nền, bắt được tin nhắn và lưu trữ giá trị trạng thái mới vào PostgreSQL.
-
-\subsection{Luồng gửi lệnh điều khiển (Downlink Flow)}
+\subsection{Luồng downlink: người dùng gửi lệnh điều khiển}
 \label{sec:ch3-dataflow-downlink}
 
-Downlink flow chịu trách nhiệm truyền tải lệnh điều khiển bật/tắt từ người dùng xuống thiết bị chấp hành cuối. Hình \ref{fig:ch3-downlink} thể hiện chi tiết quá trình này.
+Downlink là chiều điều khiển từ Mobile xuống thiết bị. Người dùng bấm bật/tắt đèn trên Mobile. Mobile gọi REST API tạo command. Cloud lưu command, chuyển command thành MQTT envelope và publish tới topic request của Gateway. Gateway nhận bản tin, đưa vào queue, xử lý trong main tick, gọi module light control rồi gửi lệnh Zigbee On/Off xuống thiết bị.
 
 \begin{figure}[H]
     \centering
-    % Thay hình downlink flow phù hợp kiến trúc NCP + MQTT
-    % \includegraphics[width=0.85\textwidth]{Images/Down_stream_SmartHome.png}
-    \caption{Sơ đồ luồng điều khiển Downlink từ Cloud xuống thiết bị}
-    \label{fig:ch3-downlink}
+    \resizebox{\textwidth}{!}{%
+    \begin{tikzpicture}[font=\small, >=stealth]
+        \tikzstyle{flowbox}=[draw, rounded corners, align=center, minimum width=2.5cm, minimum height=0.95cm]
+        \node[flowbox] (mobile) at (0,0) {Mobile\\POST command};
+        \node[flowbox] (cloud) at (4.5,0) {Cloud API\\create command};
+        \node[flowbox] (broker) at (9.5,0) {Mosquitto\\request topic};
+        \node[flowbox] (queue) at (14.5,0) {Gateway\\queue + dispatch};
+        \node[flowbox] (zigbee) at (19.0,0) {Zigbee\\On/Off command};
+        \node[flowbox] (reply) at (9.5,-2.2) {Command reply\\executed/failed};
+
+        \draw[->, thick] (mobile) -- node[above, font=\scriptsize]{REST} (cloud);
+        \draw[->, thick] (cloud) -- node[above, font=\scriptsize]{MQTT request} (broker);
+        \draw[->, thick] (broker) -- node[above, font=\scriptsize]{subscribe} (queue);
+        \draw[->, thick] (queue) -- node[above, font=\scriptsize]{ZCL} (zigbee);
+        \draw[->, thick] (queue) |- node[pos=0.28,right, font=\scriptsize]{MQTT reply} (reply);
+        \draw[->, thick] (reply) -- node[below, align=center, font=\scriptsize]{Cloud updates\\command} (cloud);
+        \draw[->, thick] (cloud.south) -- ++(0,-0.5) -| node[pos=0.5,below, font=\scriptsize]{poll status} (mobile.south);
+    \end{tikzpicture}}
+    \caption{Luồng downlink và phản hồi command}
+    \label{fig:ch3-downlink-flow}
 \end{figure}
 
-Các bước cụ thể trong quy trình Downlink bao gồm:
+Trong phần đánh giá, cần hiểu đúng ý nghĩa của trạng thái \texttt{executed}. Với light command hiện tại, trạng thái này phản ánh việc Gateway đã gửi lệnh xuống Zigbee ở mức truyền lệnh, chưa phải một xác nhận ứng dụng đầy đủ rằng thiết bị vật lý chắc chắn đã đổi trạng thái. Vì vậy reported state sau đó vẫn là nguồn đáng tin hơn để hiển thị trạng thái thiết bị.
 
-\textbf{Bước 1 -- Gửi yêu cầu điều khiển từ UI:} Người dùng thao tác trên giao diện, gọi REST API điều khiển (\text{POST /api/devices/\{id\}/command}).
+\subsection{Luồng automation}
+\label{sec:ch3-automation-flow}
 
-\textbf{Bước 2 -- Tiếp nhận và gửi yêu cầu từ Cloud:} Cloud API tạo bản ghi lệnh điều khiển mới trong cơ sở dữ liệu với trạng thái khởi tạo \text{accepted}, đồng thời xuất bản tin nhắn lệnh điều khiển lên MQTT topic của Gateway.
+Automation hiện có hai phần cần phân biệt. Phía Cloud đã có API tạo/sửa/xóa automation rule, validate trigger/action và publish desired automation rule lên MQTT retained topic. Phía Gateway có rule engine local cho tình huống switch-to-light, nhưng mặc định không có binding nếu chưa bật biến môi trường \texttt{SB\_RULES\_SWITCH\_TO\_LIGHT=1}. Trong mã nguồn hiện tại chưa thấy Gateway subscribe topic \texttt{desired/automation}.
 
-\textbf{Bước 3 -- Nhận và phân tích lệnh tại Gateway:} Gateway nhận được bản tin MQTT qua module \texttt{app\_mqtt.c}, tiến hành phân tích JSON envelope tại \texttt{cmd\_handler.c} để xác minh tính hợp lệ.
+\begin{figure}[H]
+    \centering
+    \resizebox{0.95\textwidth}{!}{%
+    \begin{tikzpicture}[font=\small, >=stealth]
+        \tikzstyle{block}=[draw, rounded corners, align=center, minimum width=3.0cm, minimum height=0.95cm]
+        \node[block] (mobile) at (0,0) {Mobile\\Automation CRUD};
+        \node[block] (cloud) at (5.2,0) {Cloud\\validate + persist};
+        \node[block] (desired) at (10.5,0) {MQTT retained\\desired/automation};
+        \node[block] (gwcloud) at (16.0,0) {Gateway\\chưa consume topic này};
 
-\textbf{Bước 4 -- Tra cứu địa chỉ và gửi lệnh ZCL:} Gateway tra cứu bảng địa chỉ thiết bị trong RAM tại \texttt{device\_registry.c} để lấy địa chỉ 16-bit tương ứng của Light, sau đó gọi \texttt{light\_ctrl.c} gửi khung lệnh ZCL On/Off xuống Coordinator qua UART.
+        \node[block] (switch) at (0,-2.4) {Switch event\\toggle};
+        \node[block] (rule) at (5.2,-2.4) {Gateway local\\rule engine};
+        \node[block] (light) at (10.5,-2.4) {Light control\\local toggle};
 
-\textbf{Bước 5 -- Thực thi lệnh và phản hồi:} Thiết bị Light thực thi lệnh vật lý, đổi trạng thái LED và gửi trả bản tin phản hồi ngược lại Gateway để báo cáo lệnh đã chạy thành công.
+        \draw[->, thick] (mobile) -- (cloud);
+        \draw[->, thick] (cloud) -- (desired);
+        \draw[dashed, ->, thick] (desired) -- node[above, align=center, font=\scriptsize]{giới hạn\\hiện tại} (gwcloud);
+        \draw[->, thick] (switch) -- (rule);
+        \draw[->, thick] (rule) -- node[above, align=center, font=\scriptsize]{khi bật\\cấu hình} (light);
+    \end{tikzpicture}}
+    \caption{Ranh giới thiết kế automation trong phiên bản hiện tại}
+    \label{fig:ch3-automation-boundary}
+\end{figure}
 
-% ========================================
-% 3.5 THIẾT KẾ DỮ LIỆU VÀ MQTT CONTRACT
-% ========================================
-\section{Thiết kế dữ liệu và Hợp đồng giao tiếp (MQTT Contract)}
+Thiết kế này cho phép báo cáo rõ phần đã làm và phần còn mở. Cloud đã có nền tảng quản lý rule. Gateway đã có hướng xử lý local rule. Bước còn thiếu để có dynamic cloud-synced automation là cơ chế Gateway nhận desired automation, đồng bộ rule và chạy rule đó theo event thực tế.
+
+\section{Thiết kế MQTT contract}
 \label{sec:ch3-contract}
 
-Để đảm bảo các tiến trình viết bằng các ngôn ngữ khác nhau (C trên Gateway, Python trên Cloud) có thể trao đổi thông tin chính xác, hệ thống định nghĩa một bộ hợp đồng giao tiếp chuẩn hóa duy nhất dựa trên JSON Schema.
+MQTT contract dùng prefix chung:
 
-\subsection{Phân cấp cấu trúc Topics}
-\label{sec:ch3-contract-topics}
-
-Hệ thống sử dụng cấu trúc topic phân cấp hỗ trợ đa khách hàng (multi-tenant) và đa địa điểm (multi-site):
 \begin{center}
-\texttt{sb/v1/\{tenant\_id\}/\{site\_id\}/\{gateway\_id\}/\{channel\_type\}/...}
+\texttt{sb/v1/\{tenant\}/\{site\}/\{gateway\}}
 \end{center}
-Trong đó, các giá trị mặc định được cấu hình trong môi trường thử nghiệm bao gồm: \text{tenant\_id = hust}, \text{site\_id = lab01}, và \text{gateway\_id = gw-ubuntu-01}. Bảng \ref{tab:ch3-channels} mô tả các nhóm kênh truyền MQTT được thiết kế.
+
+Trong môi trường thử nghiệm, các giá trị tenant, site và gateway có thể được cấu hình theo lab. Khi viết báo cáo, nên trình bày theo biến như trên để tránh khóa thiết kế vào một máy cụ thể.
 
 \begin{table}[H]
-\centering
-\caption{Thiết kế phân lớp các kênh truyền MQTT}
-\label{tab:ch3-channels}
-\begin{tabular}{|l|l|l|l|c|}
-\hline
-\textbf{Nhóm kênh} & \textbf{Hướng truyền} & \textbf{Publisher} & \textbf{Subscriber} & \textbf{QoS} \\ \hline
-\texttt{gateway/online} & Uplink & Gateway & Cloud & 1 (Retain) \\ \hline
-\texttt{gateway/health} & Uplink & Gateway & Cloud & 0 \\ \hline
-\texttt{reported} & Uplink & Gateway & Cloud & 1 (Retain) \\ \hline
-\texttt{command} & Downlink & Cloud & Gateway & 1 \\ \hline
-\texttt{reply} & Uplink & Gateway & Cloud & 1 \\ \hline
-\end{tabular}
+    \centering
+    \caption{Các nhóm topic MQTT chính}
+    \label{tab:ch3-mqtt-topics}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{2.4cm}|>{\raggedright\arraybackslash}p{4.8cm}|>{\raggedright\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{2.1cm}|}
+        \hline
+        \textbf{Chiều} & \textbf{Topic} & \textbf{Payload chính} & \textbf{QoS/retain} \\
+        \hline
+        Cloud tới Gateway & \texttt{.../commands/}\newline\texttt{\{command\_id\}/request} & Envelope có schema, msg\_id, correlation\_id và payload command. & Cloud publish QoS 0; Gateway subscribe QoS 1. \\
+        \hline
+        Gateway tới Cloud & \texttt{.../commands/}\newline\texttt{\{command\_id\}/reply} & \texttt{command\_id}, \texttt{device\_id}, \texttt{status}, \texttt{reason}. & QoS 1, không retain. \\
+        \hline
+        Gateway tới Cloud & \texttt{.../devices/}\newline\texttt{\{device\_type\}/}\newline\texttt{\{device\_id\}/reported} & Reported state của thiết bị. & QoS 1, retain. \\
+        \hline
+        Gateway tới Cloud & \texttt{.../devices/}\newline\texttt{\{device\_type\}/}\newline\texttt{\{device\_id\}/event} & Event như \texttt{toggle} hoặc \texttt{occupancy\_changed}. & QoS 1, không retain. \\
+        \hline
+        Gateway tới Cloud & \texttt{.../devices/}\newline\texttt{\{device\_type\}/}\newline\texttt{\{device\_id\}/registry} & Identity, endpoint, cluster và metadata. & QoS 1, retain. \\
+        \hline
+        Gateway tới Cloud & \texttt{.../gateway/online}\newline\texttt{.../gateway/health} & Online/offline, uptime, mqtt\_connected, known\_device\_count. & QoS 1, retain. \\
+        \hline
+        Cloud tới Broker & \texttt{.../desired/}\newline\texttt{automation/\{automation\_id\}} & Automation payload và cờ \texttt{deleted}. & QoS 0, retain. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
 \end{table}
 
-\noindent Việc cấu hình QoS 1 cho các kênh \texttt{command} và \texttt{reply} trong Bảng \ref{tab:ch3-channels} đảm bảo lệnh điều khiển không bị mất mát khi đường truyền mạng WAN gặp sự cố ngắn hạn.
+Envelope command request được thiết kế để Gateway có đủ thông tin định danh và correlation khi trả kết quả. Ví dụ rút gọn:
 
-\subsection{Cấu trúc Envelope bản tin chung}
-\label{sec:ch3-contract-envelope}
-
-Mọi tin nhắn trao đổi qua lại giữa Gateway và Cloud đều bắt buộc sử dụng một envelope JSON chung chứa siêu dữ liệu định danh, giúp thống nhất việc deserialization:
-\begin{lstlisting}[language={}, caption={Cấu trúc envelope JSON chung của bản tin}]
+\begin{lstlisting}[caption={Ví dụ MQTT command envelope},label={lst:ch3-command-envelope}]
 {
-  "schema": "sb.v1",
-  "msg_id": "uuid-cua-ban-tin",
-  "ts": "ISO8601-timestamp",
+  "schema": "sb.v1.command",
+  "msg_id": "msg-001",
+  "ts": "2026-05-27T10:00:00Z",
   "tenant_id": "hust",
   "site_id": "lab01",
   "gateway_id": "gw-ubuntu-01",
-  "source": "gateway|cloud",
-  "correlation_id": "uuid-lien-ket-optional",
-  "payload": {}
+  "source": "cloud-api",
+  "correlation_id": "command-001",
+  "payload": {
+    "op": "device.command",
+    "device_id": "light-001",
+    "cluster": "0x0006",
+    "command": "on"
+  }
 }
 \end{lstlisting}
-Trường \texttt{correlation\_id} được sử dụng để gắn kết kết quả phản hồi trên kênh \texttt{reply} với mã lệnh điều khiển gốc gửi đi từ kênh \texttt{command}, giúp Cloud theo dõi chính xác tiến trình xử lý lệnh.
 
-% ========================================
-% 3.6 THIẾT KẾ CƠ SỞ DỮ LIỆU VÀ CLOUD BACKEND
-% ========================================
-\section{Thiết kế cơ sở dữ liệu và Cloud Backend}
-\label{sec:ch3-db-backend}
+Reported state của đèn có dạng:
 
-Dịch vụ đám mây xử lý lưu trữ trạng thái lâu bền và expose giao diện REST API.
+\begin{lstlisting}[caption={Ví dụ reported state của thiết bị đèn},label={lst:ch3-light-reported}]
+{
+  "device_id": "light-001",
+  "device_type": "light",
+  "eui64": "00124b...",
+  "nwk_addr": "0x1234",
+  "state": {
+    "power": "on",
+    "level": 100,
+    "reachable": true
+  }
+}
+\end{lstlisting}
 
-\subsection{Thiết kế cơ sở dữ liệu quan hệ (PostgreSQL)}
-\label{sec:ch3-db-design}
+\section{Thiết kế Cloud Backend và cơ sở dữ liệu}
+\label{sec:ch3-cloud-db}
 
-Cấu trúc cơ sở dữ liệu quan hệ PostgreSQL gồm 7 bảng dữ liệu chính để quản lý tổ chức hệ thống, được tóm tắt trong Bảng \ref{tab:ch3-db-tables}.
+\subsection{REST API}
+\label{sec:ch3-rest-api}
 
-\begin{table}[H]
-\centering
-\caption{Các bảng cơ sở dữ liệu chính của Cloud Backend}
-\label{tab:ch3-db-tables}
-\begin{tabular}{|l|p{10cm}|}
-\hline
-\textbf{Tên bảng} & \textbf{Vai trò nhiệm vụ lưu trữ} \\ \hline
-\text{homes} & Lưu thông tin tòa nhà/khu vực lớn nhất. \\ \hline
-\text{rooms} & Lưu thông tin phân chia các phòng thuộc tòa nhà. \\ \hline
-\text{users} & Quản lý thông tin tài khoản người dùng hệ thống. \\ \hline
-\text{devices} & Quản lý danh mục thiết bị logic (lưu \text{device\_id} logic và EUI-64). \\ \hline
-\text{device\_states} & Lưu trữ ảnh trạng thái hiện tại (reported state) dạng JSON. \\ \hline
-\text{events} & Lưu log lịch sử các sự kiện xảy ra trong hệ thống. \\ \hline
-\text{commands} & Theo dõi trạng thái chi tiết của lệnh điều khiển trong vòng đời. \\ \hline
-\end{tabular}
-\end{table}
-
-\subsection{Thiết kế REST API Endpoints}
-\label{sec:ch3-api}
-
-Hệ thống Cloud Backend expose các endpoints API theo tiêu chuẩn RESTful, sử dụng định dạng JSON làm chuẩn trao đổi thông tin. Bảng \ref{tab:ch3-api-endpoints} liệt kê các REST API cốt lõi được thiết kế phục vụ ứng dụng.
+Cloud Backend cung cấp REST API cho Mobile App. API được chia theo nhóm tài nguyên thay vì đưa toàn bộ logic vào một endpoint chung. Cách chia này phù hợp với FastAPI router và giúp Mobile chỉ gọi đúng nhóm dữ liệu cần dùng.
 
 \begin{table}[H]
-\centering
-\caption{Đặc tả các REST API endpoints chính của hệ thống}
-\label{tab:ch3-api-endpoints}
-\begin{tabular}{|l|l|p{7.5cm}|}
-\hline
-\textbf{Method} & \textbf{Path} & \textbf{Ý nghĩa chức năng} \\ \hline
-GET & \text{/health} & Kiểm tra trạng thái hoạt động của Cloud API. \\ \hline
-GET & \text{/api/devices} & Liệt kê danh sách các thiết bị trong hệ thống. \\ \hline
-GET & \text{/api/devices/\{device\_id\}/state} & Truy vấn trạng thái reported mới nhất của thiết bị. \\ \hline
-POST & \text{/api/devices/\{device\_id\}/command} & Tạo lệnh điều khiển mới, gửi command xuống Gateway. \\ \hline
-GET & \text{/api/commands/\{command\_id\}} & Tra cứu trạng thái xử lý hiện tại của lệnh điều khiển. \\ \hline
-GET & \text{/api/events} & Truy vấn lịch sử sự kiện (phân trang và lọc theo thiết bị). \\ \hline
-\end{tabular}
+    \centering
+    \caption{Các nhóm REST API chính}
+    \label{tab:ch3-api-groups}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.0cm}|>{\raggedright\arraybackslash}p{5.2cm}|>{\raggedright\arraybackslash}p{5.0cm}|}
+        \hline
+        \textbf{Nhóm API} & \textbf{Endpoint tiêu biểu} & \textbf{Mục đích} \\
+        \hline
+        Health & \texttt{GET /health} & Kiểm tra Cloud API đang chạy. \\
+        \hline
+        Devices & \texttt{GET /api/devices}, \texttt{GET /api/devices/\{id\}}, \texttt{GET /api/devices/\{id\}/state} & Lấy danh sách thiết bị và state mới nhất. \\
+        \hline
+        Commands & \texttt{POST /api/devices/\{id\}/command}\newline\texttt{GET /api/commands/\{id\}} & Tạo lệnh điều khiển và truy vấn trạng thái lệnh. \\
+        \hline
+        Events & \texttt{GET /api/events} & Lọc và xem event theo thiết bị hoặc loại event. \\
+        \hline
+        Automations & \texttt{/api/automations}\newline\texttt{/api/automation-events} & CRUD automation rule, bật/tắt rule và xem automation event. \\
+        \hline
+        Gateways & \texttt{/api/gateways/\{id\}/}\newline\texttt{commissioning/open}\newline\texttt{/api/devices/\{id\}/rediscover} & Gửi lệnh commissioning và rediscover tới Gateway. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
 \end{table}
 
-% ========================================
-% 3.7 CÁC QUYẾT ĐỊNH THIẾT KẾ VÀ TRADE-OFFS
-% ========================================
-\section{Các quyết định thiết kế và Trade-offs quan trọng}
+Mobile App có login UI nhưng trong Cloud Backend hiện tại chưa có auth router tương ứng. Vì vậy, chương này không mô tả multi-user authentication như một chức năng đã hoàn thiện.
+
+\subsection{Cơ sở dữ liệu}
+\label{sec:ch3-database}
+
+Cloud Backend dùng ORM model làm nguồn thiết kế chính cho cơ sở dữ liệu. Khi service khởi động, hệ thống gọi cơ chế tạo bảng từ model. Các bảng chính được mô tả trong Bảng \ref{tab:ch3-db-tables}.
+
+\begin{table}[H]
+    \centering
+    \caption{Các bảng dữ liệu chính}
+    \label{tab:ch3-db-tables}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.3cm}|>{\raggedright\arraybackslash}p{7.4cm}|>{\raggedright\arraybackslash}p{2.9cm}|}
+        \hline
+        \textbf{Bảng} & \textbf{Vai trò} & \textbf{Liên quan tới} \\
+        \hline
+        \texttt{homes}, \texttt{rooms} & Lưu cấu trúc không gian để gán thiết bị vào khu vực sử dụng. & Device list, dashboard. \\
+        \hline
+        \texttt{users} & Bảng người dùng đã có trong model. & Chưa có auth flow hoàn chỉnh trong Cloud API. \\
+        \hline
+        \texttt{devices} & Lưu định danh thiết bị, loại thiết bị, phòng và metadata. & Registry, REST devices. \\
+        \hline
+        \texttt{device\_states} & Lưu state mới nhất hoặc state theo bản ghi tùy cách triển khai service. & Reported state, dashboard. \\
+        \hline
+        \texttt{events} & Lưu sự kiện từ Gateway, ví dụ switch toggle hoặc motion event. & Event log, automation input. \\
+        \hline
+        \texttt{commands} & Lưu command do Mobile/API tạo, trạng thái xử lý, timeout và thông tin target. & Downlink flow, command polling. \\
+        \hline
+        \texttt{automations} & Lưu automation rule, trigger, actions, version và trạng thái sync. & Automation CRUD. \\
+        \hline
+        \texttt{automation\_events} & Lưu event liên quan đến automation, ví dụ sync hoặc execution event nếu Gateway gửi về. & Automation monitoring. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
+
+\section{Thiết kế Gateway}
+\label{sec:ch3-gateway-design}
+
+Gateway hiện tại được thiết kế theo kiểu native C host application. Thành phần MQTT chạy với libmosquitto để nhận command và publish dữ liệu lên Broker. Sau khi nhận command request, Gateway không xử lý trực tiếp trong callback MQTT mà đưa vào queue. Vòng lặp chính rút command từ queue, parse envelope, kiểm tra target rồi chuyển tới module phù hợp.
+
+\begin{table}[H]
+    \centering
+    \caption{Các module logic chính trong Gateway}
+    \label{tab:ch3-gateway-modules}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{9.6cm}|}
+        \hline
+        \textbf{Module} & \textbf{Trách nhiệm} \\
+        \hline
+        MQTT module & Kết nối Mosquitto, subscribe command request, publish reported state, registry, event, health và command reply. \\
+        \hline
+        Command parser/dispatcher & Chuẩn hóa payload \texttt{sb.v1}, xác định loại command và route tới gateway operation hoặc device operation. \\
+        \hline
+        Light control & Xử lý lệnh \texttt{on}/\texttt{off} cho đèn và gọi Zigbee On/Off cluster. \\
+        \hline
+        Switch logic & Nhận sự kiện từ công tắc; switch hiện không được thiết kế là thiết bị nhận command từ Cloud. \\
+        \hline
+        Telemetry receiver & Nhận ZCL attribute report/event từ Zigbee stack và chuyển thành MQTT payload. \\
+        \hline
+        Rule engine & Xử lý rule cục bộ switch-to-light khi cấu hình môi trường cho phép. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
+
+Điểm thiết kế đáng chú ý là Gateway không còn được mô tả như một Python MQTT-to-IPC bridge. Trong phiên bản hiện tại, đường chạy chính là Z3GatewayHost C dùng libmosquitto. Điều này giúp giảm một lớp trung gian, nhưng làm phần Gateway phụ thuộc nhiều hơn vào kỷ luật tổ chức module trong C.
+
+\section{Thiết kế Mobile App}
+\label{sec:ch3-mobile-design}
+
+Mobile App được xây dựng bằng Flutter và dùng Provider cho quản lý state ở tầng giao diện. Ứng dụng gọi Cloud qua repository, trong đó các repository remote phụ trách gọi REST API thật. Các màn hình chính gồm Home/Dashboard, Automation, Provisioning và Settings.
+
+Trong phạm vi đồ án, Mobile App có các chức năng đáng chú ý sau:
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item Xem danh sách thiết bị và trạng thái của thiết bị.
+    \item Gửi lệnh bật/tắt đèn.
+    \item Poll command status sau khi gửi lệnh để cập nhật kết quả thao tác.
+    \item Xem event log.
+    \item Tạo, sửa, bật/tắt và xóa automation rule qua Cloud API.
+    \item Có màn hình provisioning ở mức placeholder, chưa xem là quy trình provisioning hoàn chỉnh.
+\end{itemize}
+
+Thiết kế này giữ Mobile ở vai trò client. Mobile không nói chuyện trực tiếp với Gateway hoặc Zigbee device. Mọi thao tác đi qua Cloud API để Cloud có thể lưu lịch sử command, event và trạng thái hệ thống.
+
+\section{Các quyết định thiết kế và trade-off}
 \label{sec:ch3-tradeoffs}
 
-Trong quá trình thiết kế hệ thống, một số quyết định kỹ thuật quan trọng đã được đưa ra để tối ưu hiệu năng:
+Trong quá trình thiết kế, nhóm chọn cách tách hệ thống thành các tầng rõ ràng thay vì để Mobile hoặc Cloud truy cập trực tiếp mạng Zigbee. Cách làm này phù hợp với bài toán Smart Building vì Gateway thường nằm trong mạng nội bộ, còn Mobile có thể truy cập Cloud từ bên ngoài.
 
-\textbf{Loại bỏ hoàn toàn cầu nối Python trung gian tại Gateway (Tháng 4/2026):} Kiến trúc cũ sử dụng một script Python chạy nền để làm cầu nối chuyển đổi IPC (Unix socket/NDJSON) sang MQTT. Quyết định tích hợp thư viện MQTT trực tiếp vào mã nguồn C của Z3Gateway giúp loại bỏ một tiến trình, tiết kiệm tài nguyên CPU nhúng và giảm trễ truyền dẫn. Tuy nhiên, đánh đổi lại là việc duy trì và thay đổi cấu trúc dữ liệu trên Gateway C đòi hỏi biên dịch lại mã nguồn C phức tạp hơn.
+\begin{table}[H]
+    \centering
+    \caption{Các trade-off chính trong thiết kế}
+    \label{tab:ch3-tradeoffs}
+    \footnotesize
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{3.9cm}|>{\raggedright\arraybackslash}p{5.2cm}|>{\raggedright\arraybackslash}p{4.8cm}|}
+        \hline
+        \textbf{Quyết định} & \textbf{Lợi ích} & \textbf{Đánh đổi} \\
+        \hline
+        Dùng MQTT giữa Cloud và Gateway & Phù hợp với mô hình publish/subscribe, dễ gửi uplink và downlink qua Broker. & Cần quản lý topic, QoS, retain và ACL cẩn thận. \\
+        \hline
+        Gateway native C thay vì bridge Python & Giảm lớp trung gian, gần với Zigbee host stack hơn. & Code C cần tổ chức module rõ để tránh khó bảo trì. \\
+        \hline
+        Lưu command/state/event ở Cloud & Mobile có thể truy vấn lại lịch sử và trạng thái. & Cloud trở thành điểm trung tâm cần database ổn định. \\
+        \hline
+        Retain reported state/registry/health & Subscriber mới có thể lấy trạng thái gần nhất nhanh hơn. & Không nên retain event hoặc command reply vì đó là dữ liệu theo thời điểm. \\
+        \hline
+        Automation tách Cloud CRUD và Gateway local rule & Có nền để phát triển dynamic automation sau này mà vẫn có rule local đơn giản. & Phiên bản hiện tại chưa phải cloud-synced automation end-to-end. \\
+        \hline
+    \end{tabular}
+    \setlength{\tabcolsep}{6pt}
+\end{table}
 
-\textbf{Sử dụng định danh logic \text{device\_id} thay vì EUI-64 làm khóa bền:} Địa chỉ EUI-64 gắn chặt với chip vô tuyến vật lý. Thiết kế sử dụng \text{device\_id} logic tự sinh làm khóa chính trên Cloud giúp hệ thống dễ dàng thay thế phần cứng thiết bị bị hỏng bằng một thiết bị mới mà không cần cập nhật lại toàn bộ các liên kết trong database.
-
-\textbf{Chỉ giữ lại bản tin State, không giữ lại bản tin Command:} Việc giữ lại bản tin trạng thái reported giúp các client mobile khi kết nối sau lấy ngay được giao diện cập nhật. Đối với command, không sử dụng retain để tránh tình trạng khi Gateway mất kết nối và online trở lại bị Broker gửi lại các lệnh bật/tắt cũ, gây nguy hiểm cho thiết bị chấp hành thực tế.
+Từ các trade-off trên, hướng phát triển tiếp theo của hệ thống là hoàn thiện phần dynamic automation ở Gateway, bổ sung xác thực người dùng ở Cloud, tăng cường bảo mật MQTT và kiểm thử độ trễ thực tế trên nhiều thiết bị. Các phần này nên được trình bày là hướng mở rộng, không nên viết như chức năng đã hoàn thành trong phiên bản hiện tại.
