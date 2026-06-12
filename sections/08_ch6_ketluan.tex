@@ -4,94 +4,67 @@
 \chapter{KẾT LUẬN VÀ HƯỚNG PHÁT TRIỂN}
 \label{ch:ketluan}
 
-% ----- TÓM TẮT CHƯƠNG -----
 \vspace{0.5cm}
-\noindent\textit{Chương này tổng kết lại toàn bộ các kết quả nghiên cứu,
-thiết kế và triển khai thực tế đã đạt được trong phạm vi của đồ án tốt
-nghiệp. Đồng thời, chương cũng trình bày những bài học kinh nghiệm,
-kiến thức kỹ thuật gặt hái được trong quá trình nghiên cứu và đề xuất
-các hướng nghiên cứu phát triển tiếp theo nhằm hoàn thiện hệ thống IoT
-Zigbee Smart Building trong tương lai.}
+\noindent\textit{Chương này tổng kết các kết quả có thể kiểm chứng từ mã nguồn và output kiểm thử, đồng thời nêu những phần còn thiếu evidence. Các hướng phát triển tập trung vào độ ổn định, khả năng quan sát, bảo mật và trải nghiệm vận hành của hệ thống.}
 \vspace{0.5cm}
 
-% ========================================
-% 6.1 KẾ LƯẬN
-% ========================================
 \section{Kết luận chung}
 \label{sec:ch6-conclusion}
 
-Sau thời gian nghiên cứu và thực hiện, đồ án tốt nghiệp đã hoàn thành
-đầy đủ các mục tiêu đề ra ban đầu, xây dựng thành công một hệ thống IoT
-Smart Building đồng bộ từ tầng vật lý đến tầng ứng dụng của người dùng.
-Các kết quả cụ thể đạt được bao gồm:
+Đồ án đã xây dựng được cấu trúc phần mềm cho một hệ thống Smart Building gồm thiết bị Zigbee, Gateway viết bằng C, Message Queuing Telemetry Transport (MQTT) Broker, Cloud Backend FastAPI, cơ sở dữ liệu PostgreSQL và Mobile App Flutter. Các lớp trao đổi qua hợp đồng dữ liệu rõ ràng thay vì để ứng dụng truy cập trực tiếp mạng Zigbee.
 
-\textbf{Thiết kế và triển khai mạng Zigbee 3.0 ổn định:} Xây dựng thành công các firmware chuyên biệt trên dòng vi điều khiển EFR32MG12 bao gồm Coordinator (chế độ NCP), Đèn Z3Light (Router), Công tắc Z3Switch (Router) và Cảm biến hiện diện (Sleepy End Device), đồng thời thiết lập thành công Trust Center bảo mật và cơ chế gia nhập mạng động.
+Ở lớp thiết bị, repository có firmware cho EFR32 Network Co-Processor (NCP), đèn, công tắc và cảm biến chuyển động. Ở lớp Gateway, Z3GatewayHost dùng \texttt{libmosquitto} để nhận lệnh và phát trạng thái, sự kiện, registry hoặc phản hồi. Ở lớp Cloud, hệ thống có API, mô hình dữ liệu, quản lý vòng đời lệnh, xác thực, phân quyền theo vai trò và kiểm soát phạm vi nhà/thiết bị. Mobile App có đăng nhập, lưu phiên bảo mật, giám sát thiết bị, điều khiển đèn, tự động hóa và thêm thiết bị.
 
-\textbf{Xây dựng Gateway nhúng hiệu năng cao:} Triển khai ứng dụng Gateway viết bằng ngôn ngữ C kết nối trực tiếp với thư viện Paho MQTT C để loại bỏ hoàn toàn các lớp trung gian Unix socket/IPC cũ. Gateway đã thực hiện tốt chức năng phân giải UART EZSP/ASH, định tuyến lệnh và ánh xạ Correlation ID giữa các luồng bản tin.
+Kết quả test tự động ngày 12/06/2026 cho thấy nhóm xác thực/phân quyền có 21 test đạt, nhóm thiết bị/lệnh/MQTT có 27 test đạt, nhóm tự động hóa/thêm thiết bị có 61 test đạt và Mobile App có 104 test đạt. Toàn bộ Cloud suite chưa xanh vì 5 contract test thiếu tài liệu production; kết quả tổng là 177 đạt, 5 lỗi và 21 bỏ qua.
 
-\textbf{Phát triển Cloud Backend và CSDL đám mây:} Xây dựng hệ thống API RESTful và MQTT Client bất đồng bộ sử dụng framework FastAPI kết nối PostgreSQL, triển khai Worker quét dọn Timeout lệnh ở nền và đóng gói toàn bộ hệ thống bằng Docker Compose trên AWS EC2.
+Báo cáo chưa kết luận các test phần cứng và luồng xuyên suốt đã đạt nếu chưa có log, ảnh, API response hoặc video tương ứng. Cách ghi nhận này giữ ranh giới rõ giữa chức năng có trong source, chức năng đã được test tự động và hành vi đã được xác nhận trên thiết bị thật.
 
-\textbf{Phát triển ứng dụng di động Flutter:} Thiết kế giao diện ứng dụng di động trực quan cho phép giám sát trạng thái thiết bị gần thời gian thực, gửi lệnh bật/tắt Đèn và theo dõi lịch sử sự kiện hệ thống.
-
-Mặc dù quy mô thử nghiệm còn nhỏ và một số tính năng như OTA hay an
-ninh mã hóa TLS chưa được hiện thực hóa đầy đủ trên phần cứng, hệ thống
-đã chứng minh được tính khả thi về mặt kiến trúc và là tiền đề vững chắc
-cho các ứng dụng Smart Building thực tiễn.
-
-% ========================================
-% 6.2 KIẾN THỨC VÀ KỸ NĂNG ĐẠT ĐƯỢC
-% ========================================
 \section{Kiến thức và kỹ năng đạt được}
 \label{sec:ch6-skills-learned}
 
-Quá trình thực hiện đồ án đã giúp sinh viên tích lũy và nâng cao nhiều kiến thức chuyên môn cũng như kỹ năng thực hành kỹ thuật quan trọng:
+Quá trình thực hiện giúp nhóm hiểu cách Zigbee tổ chức Coordinator, Router, End Device, cluster, attribute và command. Nhóm cũng làm việc với giao tiếp Host--NCP qua EmberZNet Serial Protocol (EZSP), cơ chế publish/subscribe của MQTT và vòng đời bất đồng bộ của lệnh điều khiển.
 
-\textbf{Kiến thức lý thuyết:} Hiểu rõ cấu trúc phân lớp của giao thức vô tuyến Zigbee 3.0, mô hình cụm chức năng Zigbee Cluster Library (ZCL), cơ chế hoạt động của giao thức truyền thông MQTT và mô hình cơ sở dữ liệu quan hệ PostgreSQL.
+Ở phần mềm phía trên, nhóm thực hành xây dựng API bằng FastAPI, ánh xạ dữ liệu quan hệ bằng SQLAlchemy, quản lý phiên đăng nhập, phân quyền theo vai trò và lưu token trên ứng dụng di động. Việc tách repository, view model và giao diện trong Flutter giúp kiểm thử từng phần mà không phụ thuộc thiết bị thật.
 
-\textbf{Kỹ năng lập trình nhúng:} Thành thạo việc cấu hình, lập trình firmware trên IDE Simplicity Studio v5 của Silicon Labs, làm việc với ngăn xếp EmberZNet stack và lập trình hệ thống bằng C trên Linux.
+Nhóm sử dụng Jira để quản lý đầu việc, Git để quản lý lịch sử thay đổi và GitHub để chia sẻ repository. Quá trình tích hợp cũng rèn luyện cách đọc log, thiết kế test case, phân biệt lỗi phần mềm với lỗi môi trường và chỉ kết luận khi evidence đủ mạnh.
 
-\textbf{Kỹ năng Cloud và DevOps:} Tiếp cận với các công nghệ xây dựng API bất đồng bộ với FastAPI, quản lý và vận hành CSDL qua SQLAlchemy, đóng gói container Docker và quy trình triển khai máy chủ thực tế trên nền tảng điện toán đám mây AWS EC2.
-
-\textbf{Kỹ năng nghiên cứu và giải quyết vấn đề:} Rèn luyện tư duy phân tích thiết kế hệ thống có tính hệ thống, phương pháp kiểm thử thực tế dựa trên logs, khắc phục các lỗi phát sinh thực tế như CRLF dòng lệnh, xung đột cổng dịch vụ hay phân quyền ACL.
-
-% ========================================
-% 6.3 HƯỚNG PHÁT TRIỂN TIẾP THEO
-% ========================================
 \section{Hướng phát triển tiếp theo}
 \label{sec:ch6-future-work}
 
-Để hệ thống trở nên hoàn thiện hơn, tiệm cận với các tiêu chuẩn sản phẩm thương mại, các hướng nghiên cứu phát triển tiếp theo được đề xuất bao gồm:
-
-\subsection{Hoàn thiện phần cứng và mạng thiết bị}
+\subsection{Hoàn thiện phần cứng và kiểm thử dài hạn}
 \label{sec:ch6-fw-future}
 
-\textbf{Mở rộng loại thiết bị:} Nghiên cứu phát triển thêm các loại node thiết bị mới như thiết bị điều chỉnh độ sáng (Dimmer), cảm biến nhiệt độ độ ẩm, công tắc thông minh nhiều kênh và ổ cắm thông minh.
+Cần chạy lại toàn bộ test join, điều khiển đèn, sự kiện công tắc, cảm biến chuyển động và tự động hóa trên thiết bị thật. Mỗi lần chạy cần lưu command ID, log Gateway, MQTT trace, API response và ảnh hoặc video. Sau khi luồng cơ bản ổn định, hệ thống nên được kiểm thử nhiều node, nhiễu sóng, mất điện và vận hành liên tục.
 
-\textbf{Ổn định hóa Occupancy Sensor:} Thay thế nút nhấn BTN0 bằng cảm biến chuyển động vật lý PIR hoặc cảm biến hiện diện radar mmWave thực tế, kết hợp lập trình các thuật toán chống nhiễu (debouncing/filtering) ở firmware để đưa ra trạng thái hiện diện chính xác nhất.
+Cảm biến chuyển động có thể được mở rộng bằng cảm biến PIR hoặc radar hiện diện thay cho nguồn kích hoạt mô phỏng. Firmware cần xử lý chống dội và lọc nhiễu trước khi phát thay đổi thuộc tính.
 
-\textbf{Cấu hình nhóm (Zigbee Group/Scene):} Nghiên cứu triển khai tính năng nhóm thiết bị ở lớp mạng để thực hiện các lệnh điều khiển đồng thời (ví dụ: tắt toàn bộ đèn trong phòng) một cách đồng bộ và nhanh chóng.
+\textbf{Bổ sung node chấp hành:} Hệ thống nên thêm các actuator, tức node chấp hành biến lệnh phần mềm thành tác động vật lý. Các node ưu tiên gồm ổ cắm thông minh, relay nhiều kênh, dimmer điều chỉnh độ sáng, động cơ rèm và bộ điều khiển điều hòa. Mỗi loại cần có device type, cluster Zigbee, trạng thái và tập lệnh riêng; không nên dùng hợp đồng của đèn để mô phỏng mọi actuator.
 
-\subsection{Nâng cấp tính năng cho Gateway nhúng}
+\textbf{Cập nhật firmware từ xa:} Over-the-Air (OTA) là cơ chế phân phối firmware qua mạng thay vì nạp trực tiếp bằng cáp. Hướng phát triển này cần bootloader phù hợp trên thiết bị, image có phiên bản và chữ ký, server/client của Zigbee OTA Cluster, cơ chế tải và kiểm tra image tại Gateway, API quản lý chiến dịch tại Cloud và khả năng phục hồi khi cập nhật thất bại \cite{silabs-ota}. OTA chỉ nên triển khai sau khi các luồng điều khiển và phục hồi kết nối hiện tại có evidence ổn định.
+
+\subsection{Nâng cấp Gateway}
 \label{sec:ch6-gw-future}
 
-\textbf{Chuyển đổi sang nền tảng máy chủ nhúng:} Chuyển tiến trình Z3Gateway từ máy tính xách tay Ubuntu sang chạy thực tế trên các máy tính nhúng như Raspberry Pi hoặc Orange Pi kết hợp với một module NCP EFR32 cắm qua cổng USB.
+Gateway nên được chuyển sang máy tính nhúng chuyên dụng và chạy như một dịch vụ tự khởi động. Hàng đợi lệnh, registry và rule engine cần có metric để theo dõi số bản tin, lỗi phân loại, độ đầy hàng đợi và thời gian xử lý.
 
-\textbf{Hoàn thiện Rules Engine cục bộ:} Phát triển bộ thông dịch rule động tại Gateway, cho phép người dùng cấu hình các kịch bản tự động hóa (ví dụ: Đèn tự bật khi Cảm biến báo có người vào ban đêm) ngay tại biên để hệ thống vẫn tự động hóa bình thường khi mất kết nối mạng.
+Rule engine cục bộ cần hỗ trợ đồng bộ phiên bản luật, rollback khi cấu hình không hợp lệ và hành vi xác định khi mất kết nối Cloud. Các test phục hồi phải chứng minh Gateway không thực thi lặp một lệnh sau khi reconnect.
 
-\subsection{Nâng cấp nền tảng Cloud và Ứng dụng di động}
+\subsection{Nâng cấp Cloud và Mobile App}
 \label{sec:ch6-cloud-future}
 
-\textbf{Truyền dữ liệu thời gian thực (Real-time update):} Bổ sung cầu nối WebSocket hoặc Server-Sent Events (SSE) giữa Cloud Backend và App di động để thay thế cho cơ chế kéo (poll) dữ liệu REST API hiện tại, giúp cập nhật trạng thái tức thời với băng thông tối thiểu.
+Cloud cần hoàn thiện các tài liệu production mà contract test đang yêu cầu, gồm vận hành, acceptance checklist, release runbook và release notes. Hệ thống cũng cần backup/restore cơ sở dữ liệu, giám sát tập trung và cảnh báo khi Gateway hoặc thiết bị ngoại tuyến.
 
-\textbf{Triển khai tính năng OTA đã thiết kế:} Lập trình Gecko Bootloader trên thiết bị con và tích hợp logic nạp GBL file vô tuyến tại Gateway để hoàn thiện luồng nâng cấp phần mềm từ xa (OTA Campaign).
+Mobile App hiện truy vấn lại trạng thái lệnh. Có thể bổ sung WebSocket hoặc Server-Sent Events (SSE), tức cơ chế máy chủ chủ động đẩy sự kiện, để giảm độ trễ hiển thị. Thay đổi này cần giữ REST API làm nguồn dữ liệu bền vững và xử lý trường hợp App mất kết nối.
 
-\textbf{Đẩy thông báo (Push Notification):} Tích hợp Firebase Cloud Messaging (FCM) để gửi thông báo khẩn cấp tới điện thoại người dùng khi phát hiện chuyển động bất thường hoặc khi có thiết bị ngoại tuyến.
+\textbf{Mở rộng mô hình phân quyền:} Ba vai trò hiện tại là \texttt{admin}, \texttt{parent} và \texttt{viewer}. Khi áp dụng cho tòa nhà lớn hơn, hệ thống có thể bổ sung \texttt{building\_manager} cho người quản lý tòa nhà, \texttt{technician} cho kỹ thuật viên bảo trì, \texttt{tenant} cho người thuê và \texttt{guest} cho khách tạm thời. Mỗi vai trò cần ma trận quyền, phạm vi theo site/tầng/phòng, thời hạn truy cập và audit log; không chỉ bổ sung tên role trong cơ sở dữ liệu.
 
-\subsection{Tăng cường An ninh bảo mật}
+\subsection{Tăng cường bảo mật}
 \label{sec:ch6-security-future}
 
-\textbf{Mã hóa TLS cho đường truyền MQTT:} Thiết lập chứng chỉ bảo mật SSL/TLS trên Mosquitto Broker và cấu hình Gateway/Cloud kết nối qua cổng 8883 để bảo mật toàn bộ dữ liệu trao đổi.
+Cấu hình Transport Layer Security (TLS) và mutual TLS (mTLS), tức xác thực chứng thư ở cả hai phía, cần được kiểm tra trên môi trường triển khai thực tế. MQTT Access Control List (ACL) phải giới hạn từng client trong đúng tenant, site và gateway.
 
-\textbf{Xác thực người dùng nâng cao:} Triển khai cơ chế xác thực OAuth2 kết hợp JWT (JSON Web Token) trên Cloud API để bảo vệ các endpoint điều khiển khỏi truy cập trái phép.
+Cloud cần bổ sung chính sách mật khẩu, thu hồi phiên, xoay vòng khóa và audit log cho thao tác nhạy cảm. Kiểm thử bảo mật phải bao gồm người dùng khác nhà, token hết hạn, refresh token đã thu hồi và client MQTT cố truy cập topic ngoài namespace.
 
-\newpage
+\section{Kết luận chương}
+
+Hệ thống đã có nền tảng kỹ thuật đủ để tiếp tục kiểm thử và hoàn thiện theo hướng sản phẩm. Ưu tiên tiếp theo không phải mở rộng thêm nhiều tính năng, mà là hoàn tất evidence phần cứng, làm xanh toàn bộ test suite, bổ sung tài liệu vận hành và đo độ ổn định trong điều kiện thực tế.

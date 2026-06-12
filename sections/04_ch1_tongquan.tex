@@ -39,13 +39,13 @@ Mục tiêu tổng quát của đồ án là thiết kế, chế tạo và tích
 
 \textbf{Phía thiết bị cuối (End Devices):} Thiết kế và nạp firmware cho các thiết bị Zigbee 3.0 dựa trên vi điều khiển EFR32MG12 bao gồm thiết bị đèn (Z3Light), công tắc (Z3Switch) và cảm biến hiện diện (Occupancy/Motion Sensor) hoạt động ổn định trong mạng mesh Zigbee.
 
-\textbf{Phía Gateway trung gian:} Triển khai ứng dụng Z3Gateway dạng tiến trình đơn (single-process) viết bằng ngôn ngữ C chạy trên Linux host. Tích hợp trực tiếp thư viện kết nối MQTT để giao tiếp trực tiếp với Cloud, loại bỏ hoàn toàn các lớp trung gian trung chuyển IPC phức tạp nhằm giảm độ trễ và tăng tính ổn định.
+\textbf{Phía Gateway trung gian:} Triển khai ứng dụng Z3Gateway dạng tiến trình đơn (single-process) viết bằng ngôn ngữ C chạy trên Linux host. Gateway tích hợp MQTT client để nhận command từ Cloud, chuyển thành thao tác Zigbee và publish trạng thái, sự kiện hoặc phản hồi trở lại broker.
 
 \textbf{Phía dịch vụ đám mây (Cloud Backend):} Xây dựng Cloud Backend sử dụng framework FastAPI (Python 3.12) kết nối cơ sở dữ liệu PostgreSQL. Hệ thống đám mây phải tiếp nhận các bản tin telemetry báo cáo trạng thái, quản lý vòng đời lệnh điều khiển, lưu trữ lịch sử sự kiện và cung cấp hệ thống REST API chuẩn hóa.
 
-\textbf{Phía ứng dụng giám sát (Dashboard/App):} Thiết kế các giao diện mô phỏng dưới dạng API hoặc màn hình quản lý cho phép theo dõi trực quan danh sách thiết bị, trạng thái vận hành hiện tại và gửi lệnh bật/tắt thiết bị đèn.
+\textbf{Phía ứng dụng di động (Mobile App):} Xây dựng ứng dụng Flutter hỗ trợ đăng nhập, xem danh sách và trạng thái thiết bị, gửi lệnh bật/tắt đèn, xem sự kiện, quản lý luật tự động hóa và thực hiện luồng thêm thiết bị theo quyền được cấp.
 
-\textbf{Về mặt kiểm thử và đánh giá:} Xây dựng bộ kịch bản kiểm thử (test cases) end-to-end hoàn chỉnh nhằm đo đạc độ trễ phản hồi của lệnh điều khiển, kiểm chứng tính chính xác của cơ chế đồng bộ trạng thái và ghi nhận bằng chứng vận hành (logs, traces).
+\textbf{Về mặt kiểm thử và đánh giá:} Xây dựng bộ test tự động cho Cloud và Mobile App, đồng thời định nghĩa các test case xuyên suốt cho thiết bị, Gateway, MQTT, Cloud và App. Kết quả chỉ được kết luận khi có output, log, API response, ảnh hoặc video tương ứng.
 
 % ========================================
 % 1.3 PHẠM VI VÀ GIỚI HẠN
@@ -74,9 +74,13 @@ Do hạn chế về mặt thời gian và trang thiết bị phần cứng, đ�
 
 \textbf{Quy mô thử nghiệm:} Do hạn chế về mặt thời gian và trang thiết bị phần cứng, hệ thống chỉ dừng lại ở quy mô thử nghiệm phòng lab (lab-scale) với số lượng thiết bị demo hạn chế (khoảng 3-5 node), chưa được triển khai thực tế trên quy mô tòa nhà nhiều tầng với mật độ cản trở vật lý cao.
 
-\textbf{Ứng dụng di động:} Ứng dụng di động Flutter và cơ chế điều khiển tích hợp qua giao thức Bluetooth Low Energy (BLE) chỉ dừng lại ở mức thiết kế giao diện tĩnh (placeholders) hoặc mô phỏng logic client, chưa được tích hợp kết nối API thực tế chạy trên thiết bị di động thật trong bản v1 này.
+\textbf{Phạm vi thiết bị và Gateway:} Phiên bản hiện tại quản lý một Gateway và ba loại thiết bị chính là \texttt{light}, \texttt{switch} và \texttt{motion}. Hệ thống chưa kiểm thử nhiều Gateway, nhiều site hoặc các node chấp hành khác như ổ cắm, relay, dimmer, rèm và thiết bị điều hòa.
 
-\textbf{Tính năng nâng cao:} Các tính năng nâng cao như cơ chế cập nhật firmware từ xa (OTA Update), bảo mật mã hóa đường truyền MQTT qua TLS (port 8883) và hệ thống xác thực người dùng (Authentication API) chỉ được thực hiện ở mức phân tích thiết kế kịch bản lý thuyết (contracts), chưa có mã nguồn triển khai chạy thực tế.
+\textbf{Ứng dụng di động:} Ứng dụng Flutter đã có repository gọi API thật, đăng nhập, quản lý phiên, điều khiển đèn, tự động hóa và thêm thiết bị. Tuy nhiên, báo cáo chưa có đủ evidence để kết luận toàn bộ luồng đã ổn định trên nhiều loại điện thoại và trong thời gian vận hành dài.
+
+\textbf{Cập nhật trạng thái:} Mobile App chủ yếu gọi REST API và truy vấn lại trạng thái lệnh. Hệ thống chưa dùng kênh đẩy dữ liệu như WebSocket hoặc Server-Sent Events, vì vậy độ trễ hiển thị phụ thuộc chu kỳ gọi API và trạng thái kết nối.
+
+\textbf{Vận hành và kiểm thử:} Phiên bản hiện tại còn thiếu evidence phần cứng cho một số test xuyên suốt, chưa kiểm thử tải lớn và chưa hoàn thiện bộ tài liệu vận hành production mà contract test yêu cầu. Vì vậy, báo cáo chỉ khẳng định các kết quả đã có log hoặc output kiểm thử tương ứng.
 
 % ========================================
 % 1.4 PHƯƠNG PHÁP THỰC HIỆN
@@ -88,7 +92,8 @@ Do hạn chế về mặt thời gian và trang thiết bị phần cứng, đ�
 
 \begin{figure}[H]
     \centering
-    % Do chưa có hình thật, sử dụng caption và nhãn để mô phỏng sơ đồ khối phương pháp
+    \includegraphics[width=0.82\textwidth]{Images/mermaid/ch1_project_method_1.png}\\[0.25cm]
+    \includegraphics[width=0.58\textwidth]{Images/mermaid/ch1_project_method_2.png}
     \caption{Quy trình nghiên cứu và triển khai hệ thống}
     \label{fig:ch1-flowchart}
 \end{figure}
@@ -99,7 +104,7 @@ Quy trình thực hiện bao gồm các giai đoạn cụ thể sau:
 
 \textbf{Giai đoạn 2 -- Thiết kế hệ thống:} Xác định sơ đồ khối kiến trúc hệ thống 4 lớp, thiết kế cấu trúc cơ sở dữ liệu PostgreSQL, xây dựng hợp đồng trao đổi bản tin MQTT (MQTT Contract JSON Schema) và cấu hình các topic phân cấp.
 
-\textbf{Giai đoạn 3 -- Triển khai chi tiết từng module:} Lập trình firmware cho các SoC EFR32MG12; viết mã nguồn Z3Gateway bằng ngôn ngữ C; xây dựng Cloud API bằng FastAPI.
+\textbf{Giai đoạn 3 -- Triển khai:} Lập trình firmware cho EFR32MG12; viết Z3Gateway bằng ngôn ngữ C; xây dựng Cloud API bằng FastAPI.
 
 \textbf{Giai đoạn 4 -- Tích hợp hệ thống:} Kết nối Gateway host với chip NCP qua UART, kết nối Gateway lên Mosquitto Broker chạy trên container Docker, thiết lập liên kết đồng bộ giữa cơ sở dữ liệu và MQTT Client chạy nền trên Cloud.
 
@@ -111,7 +116,7 @@ Quy trình thực hiện bao gồm các giai đoạn cụ thể sau:
 \section{Đóng góp chính của đồ án}
 \label{sec:ch1-donggop}
 
-Kết quả thực hiện đồ án mang lại một số đóng góp chính về mặt giải pháp kỹ thuật tự phát triển thay vì sử dụng các framework đóng gói sẵn của hãng. Bảng \ref{tab:ch1-donggop} tóm tắt các đóng góp và ý nghĩa thực tế tương ứng của chúng.
+Kết quả thực hiện đồ án mang lại một số đóng góp về kiến trúc tích hợp, quản lý lệnh, nhận dạng thiết bị và phương pháp kiểm thử. Bảng \ref{tab:ch1-donggop} tóm tắt các đóng góp và ý nghĩa kỹ thuật tương ứng.
 
 \begin{table}[H]
 \centering
@@ -120,14 +125,14 @@ Kết quả thực hiện đồ án mang lại một số đóng góp chính v�
 \begin{tabular}{|p{5.5cm}|p{9cm}|}
 \hline
 \textbf{Giải pháp phát triển} & \textbf{Ý nghĩa thực tế và kỹ thuật} \\ \hline
-Kiến trúc Gateway C đơn tiến trình tích hợp trực tiếp MQTT client & Loại bỏ hoàn toàn tiến trình trung gian Python IPC cũ, giúp giảm thiểu độ trễ truyền dẫn lệnh xuống thiết bị và tiết kiệm tài nguyên CPU/RAM trên thiết bị host nhúng. \\ \hline
+Kiến trúc Gateway C đơn tiến trình tích hợp MQTT client & Giữ đường xử lý command, report và event trong cùng ứng dụng Gateway, làm rõ trách nhiệm giữa MQTT callback, hàng đợi lệnh và Zigbee callback. \\ \hline
 Mô hình theo dõi vòng đời lệnh điều khiển (Command Lifecycle) & Cho phép theo dõi tường minh trạng thái xử lý gói tin qua các pha (accepted, queued, sent, executed, failed, timeout), giải quyết bài toán lệnh bị treo hoặc mất gói vô tuyến mà cloud không phát hiện được. \\ \hline
 Chuẩn hóa mô hình nhận dạng thiết bị qua \text{device\_id} logic & Tách biệt định danh cơ sở dữ liệu khỏi địa chỉ phần cứng cố định (EUI-64) hoặc địa chỉ động (16-bit nwk\_addr), tăng tính bảo mật và cho phép linh hoạt thay thế phần cứng lỗi. \\ \hline
-Bộ kịch bản kiểm thử E2E tích hợp evidence thực tế & Cung cấp phương pháp luận kiểm thử rõ ràng từ mức đơn vị đến tích hợp hệ thống, đi kèm các bằng chứng vận hành (log trace) chứng minh hệ thống hoạt động chính xác. \\ \hline
+Khung test case xuyên suốt và nguyên tắc evidence & Tách rõ kết quả test phần mềm đã có output với test phần cứng còn cần log, API response, ảnh hoặc video trước khi đánh giá. \\ \hline
 \end{tabular}
 \end{table}
 
-Các đóng góp trên được minh chứng thông qua kết quả kiểm thử thực tế tại Chương~\ref{ch:ketqua}, cho thấy tính khả thi và độ tin cậy của giải pháp tự phát triển trong môi trường nghiên cứu phòng thí nghiệm.
+Chương~\ref{ch:ketqua} trình bày output của các nhóm test phần mềm và chỉ rõ những test phần cứng còn thiếu evidence. Cách ghi nhận này giúp phân biệt phần đã kiểm chứng tự động với phần cần tiếp tục đo trên mô hình thực.
 
 % ========================================
 % 1.6 CẤU TRÚC BÁO CÁO
@@ -147,4 +152,4 @@ Nội dung báo cáo đồ án tốt nghiệp được tổ chức thành 6 chư
 
 \textbf{Chương~\ref{ch:ketqua} -- Kiểm thử và đánh giá:} Thiết lập kế hoạch kiểm thử, trình bày kết quả chạy các test case cụ thể, ghi nhận các bằng chứng logs/traces và phân tích ưu điểm cũng như hạn chế của hệ thống.
 
-\textbf{Chương~\ref{ch:ketluan} -- Kết luận và hướng phát triển:} Tổng kết các kết quả đạt được, tự đánh giá năng lực tích lũy của bản thân và đề xuất các hướng nghiên cứu mở rộng trong tương lai như bảo mật TLS, cập nhật OTA và tích hợp WebSocket.
+\textbf{Chương~\ref{ch:ketluan} -- Kết luận và hướng phát triển:} Tổng kết các kết quả có evidence, nêu kiến thức tích lũy và đề xuất các hướng mở rộng về độ ổn định, giám sát, bảo mật và cập nhật trạng thái gần thời gian thực.

@@ -1,0 +1,9 @@
+flowchart LR
+    D["Thiết bị Zigbee<br/>Cảm biến và thiết bị chấp hành"]
+    G["Gateway<br/>Chuyển đổi Zigbee và MQTT"]
+    C["Cloud Backend<br/>API và lưu dữ liệu"]
+    A["Ứng dụng di động<br/>Giám sát và điều khiển"]
+
+    D <-->|"Zigbee"| G
+    G <-->|"MQTT"| C
+    C <-->|"REST API"| A

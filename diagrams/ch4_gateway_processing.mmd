@@ -1,0 +1,12 @@
+flowchart TD
+    M["MQTT command request"] --> Q["Hàng đợi lệnh"]
+    Q --> P["Kiểm tra envelope<br/>và phân tích thao tác"]
+    P --> D{"Loại đích"}
+    D -->|"Thiết bị"| Z["Gửi Zigbee ZCL command"]
+    D -->|"Gateway"| G["Mở mạng / rediscover"]
+    Z --> R["Tạo command reply"]
+    G --> R
+
+    E["Zigbee report / event"] --> C["Callback Zigbee stack"]
+    C --> N["Chuẩn hóa device type<br/>và payload"]
+    N --> U["MQTT reported / event / registry"]

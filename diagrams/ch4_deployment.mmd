@@ -1,0 +1,19 @@
+flowchart LR
+    APP["Mobile App"]
+    subgraph SERVER["Máy chủ demo"]
+        CLOUD["Cloud Backend<br/>FastAPI"]
+        DB[("PostgreSQL")]
+        BROKER["Eclipse Mosquitto"]
+        CLOUD <--> DB
+        CLOUD <--> BROKER
+    end
+    subgraph LOCAL["Mạng cục bộ"]
+        GW["Gateway<br/>Z3GatewayHost C"]
+        NCP["EFR32 NCP"]
+        DEV["Thiết bị Zigbee"]
+        GW <--> NCP
+        NCP <--> DEV
+    end
+
+    APP <-->|"HTTPS / REST API"| CLOUD
+    GW <-->|"MQTT"| BROKER

@@ -1,0 +1,8 @@
+flowchart LR
+    B["MQTT Broker<br/>Chuyển bản tin"]
+    G["Gateway<br/>Dịch lệnh sang Zigbee"]
+    L["Thiết bị đèn<br/>Thực thi và báo cáo"]
+
+    B --> G --> L
+    L -. "Trạng thái và phản hồi" .-> G
+    G -.-> B

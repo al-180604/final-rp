@@ -1,0 +1,12 @@
+flowchart LR
+    C["Coordinator"]
+    R1["Router 1"]
+    R2["Router 2"]
+    E1["End Device 1"]
+    E2["End Device 2"]
+
+    C <--> R1
+    C <--> R2
+    R1 <-. "Đường thay thế" .-> R2
+    R1 --> E1
+    R2 --> E2

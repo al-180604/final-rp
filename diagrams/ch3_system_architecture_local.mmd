@@ -1,0 +1,7 @@
+flowchart LR
+    D["Thiết bị Zigbee<br/>Đèn, công tắc, cảm biến chuyển động"]
+    G["Gateway<br/>Z3GatewayHost C và EFR32 NCP"]
+    B["MQTT Broker<br/>Eclipse Mosquitto"]
+
+    D <-->|"Zigbee / ZCL"| G
+    G <-->|"MQTT"| B

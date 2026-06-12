@@ -1,0 +1,7 @@
+flowchart LR
+    B["MQTT Broker<br/>Eclipse Mosquitto"]
+    C["Cloud Backend<br/>FastAPI, PostgreSQL, xác thực và phân quyền"]
+    A["Mobile App<br/>Flutter"]
+
+    B <-->|"MQTT"| C
+    C <-->|"HTTPS / REST API"| A

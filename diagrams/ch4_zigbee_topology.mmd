@@ -1,0 +1,11 @@
+flowchart LR
+    N["EFR32 NCP<br/>Coordinator"]
+    L["Z3Light<br/>Router"]
+    S["Z3Switch<br/>Router"]
+    M["Motion Sensor<br/>End Device"]
+
+    N <-->|"Zigbee mesh"| L
+    N <-->|"Zigbee mesh"| S
+    N <-->|"Zigbee mesh"| M
+    L <-. "Định tuyến khi phù hợp" .-> S
+    L <-. "Định tuyến khi phù hợp" .-> M

@@ -1,42 +1,41 @@
 % ========================================
-% PHÂN CHIA CÔNG VIỆC - DUTY ROSTER
+% PHÂN CHIA CÔNG VIỆC
 % ========================================
 \begin{center}
 {\Large\bfseries PHÂN CHIA CÔNG VIỆC}
 \end{center}
-\phantomsection \addcontentsline{toc}{chapter}{PHÂN CHIA CÔNG VIỆC}
+\phantomsection
+\addcontentsline{toc}{chapter}{PHÂN CHIA CÔNG VIỆC}
 \label{sec:duty-roster}
+
+Bảng \ref{tab:duty-roster} chia công việc thành hai vùng chính theo kiến trúc của hệ thống. Vùng Zigbee cục bộ bao gồm thiết bị, mạng Zigbee và Gateway. Vùng Cloud và lớp ứng dụng bao gồm dịch vụ phía máy chủ, cơ sở dữ liệu, phân quyền và ứng dụng di động.
 
 \begin{table}[H]
 \centering
+\caption{Phân chia công việc giữa các thành viên}
+\label{tab:duty-roster}
 \small
-\begin{tabular}{|c|p{9.5cm}|c|}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{|c|>{\raggedright\arraybackslash}p{9.2cm}|>{\centering\arraybackslash}p{3.4cm}|}
 \hline
 \textbf{STT} & \textbf{Công việc} & \textbf{Sinh viên thực hiện} \\ \hline
-\multicolumn{3}{|l|}{\textbf{Firmware -- Zigbee Devices}} \\ \hline
-1 & <Firmware Coordinator: tạo mạng, Trust Center, ZCL, UART bridge> & <SV> \\ \hline
-2 & <Firmware Light Device: On/Off Server, LED indicator, state report> & <SV> \\ \hline
-3 & <Firmware Switch Device: On/Off Client, binding, button control> & <SV> \\ \hline
-4 & <Firmware Occupancy Sensor: occupancy detection, ZCL report> & <SV> \\ \hline
-\multicolumn{3}{|l|}{\textbf{Gateway Service (Ubuntu / Raspberry Pi)}} \\ \hline
-5 & <Gateway UART module: kết nối COM, đọc line, reconnect> & <SV> \\ \hline
-6 & <Gateway MQTT bridge: subscribe cmd, publish state/telemetry/ack> & <SV> \\ \hline
-7 & <Gateway rules engine, ACK routing, retry/timeout> & <SV> \\ \hline
-8 & <Gateway Admin API (/health, /status, /config, /rules)> & <SV> \\ \hline
-\multicolumn{3}{|l|}{\textbf{Cloud -- Firebase}} \\ \hline
-9 & <Firebase setup: Realtime DB / Firestore schema, Cloud Functions> & <SV> \\ \hline
-10 & <MQTT -- Firebase bridge: device state sync, command relay> & <SV> \\ \hline
-11 & <Event history, logging, device management trên cloud> & <SV> \\ \hline
-\multicolumn{3}{|l|}{\textbf{Mobile App -- Flutter}} \\ \hline
-12 & <Flutter app: device list, light on/off control UI> & <SV> \\ \hline
-13 & <Flutter app: occupancy state display, realtime update> & <SV> \\ \hline
-14 & <Flutter app: event history, notification> & <SV> \\ \hline
-\multicolumn{3}{|l|}{\textbf{Tổng hợp \& Tài liệu}} \\ \hline
-15 & <Tổng hợp và hoàn thiện báo cáo> & <SV 1, SV 2> \\ \hline
+\multicolumn{3}{|l|}{\textbf{Vùng 1: Zigbee cục bộ}} \\ \hline
+1 & Nghiên cứu mạng Zigbee, vai trò Coordinator, Router và End Device; cấu hình bộ xử lý mạng EFR32 ở chế độ Network Co-Processor (NCP). & Lê Đức Anh \\ \hline
+2 & Xây dựng firmware cho thiết bị đèn: On/Off Server, phản hồi trạng thái và kiểm tra hoạt động của đèn. & Lê Đức Anh \\ \hline
+3 & Xây dựng firmware cho công tắc và cảm biến chuyển động: phát sinh sự kiện, báo cáo thuộc tính và kiểm tra tham gia mạng. & Chu Thiên Phú \\ \hline
+4 & Triển khai Gateway bằng ngôn ngữ C: kết nối Host--NCP, quản lý thiết bị, nhận dữ liệu Zigbee và điều phối lệnh. & Lê Đức Anh \\ \hline
+5 & Tích hợp Message Queuing Telemetry Transport (MQTT) trên Gateway: nhận lệnh, gửi trạng thái, sự kiện, thông tin thiết bị và phản hồi thực thi. & Lê Đức Anh, Chu Thiên Phú \\ \hline
+\multicolumn{3}{|l|}{\textbf{Vùng 2: Cloud và lớp ứng dụng}} \\ \hline
+6 & Thiết kế và triển khai Cloud Backend bằng FastAPI; xây dựng các Application Programming Interface (API) cho thiết bị, lệnh, sự kiện, tự động hóa và thêm thiết bị. & Chu Thiên Phú \\ \hline
+7 & Thiết kế lược đồ cơ sở dữ liệu cho người dùng, nhà, phòng, thiết bị, trạng thái, sự kiện, lệnh và luật tự động hóa. & Chu Thiên Phú \\ \hline
+8 & Triển khai đăng nhập, quản lý phiên và Role-Based Access Control (RBAC), tức cơ chế phân quyền theo vai trò và phạm vi nhà/thiết bị. & Chu Thiên Phú \\ \hline
+9 & Phát triển Mobile App bằng Flutter: đăng nhập, giám sát thiết bị, điều khiển đèn, xem sự kiện, tự động hóa và thêm thiết bị. & Lê Đức Anh \\ \hline
+10 & Tích hợp xuyên suốt Device--Gateway--Cloud--App; xây dựng test case, thu thập evidence và xử lý lỗi liên thành phần. & Lê Đức Anh, Chu Thiên Phú \\ \hline
+11 & Quản lý công việc bằng Jira; quản lý phiên bản mã nguồn bằng Git và GitHub; tổng hợp tài liệu và hoàn thiện báo cáo. & Lê Đức Anh, Chu Thiên Phú \\ \hline
 \end{tabular}
-\caption{Bảng phân chia công việc}
-\label{tab:duty-roster}
+\setlength{\tabcolsep}{6pt}
 \end{table}
 
-\vspace{0.3cm}
+Việc phân chia trên xác định người phụ trách chính nhưng không tách rời quá trình tích hợp. Các luồng xuyên suốt, đặc biệt là điều khiển đèn, đồng bộ trạng thái và tự động hóa, cần cả hai thành viên cùng kiểm tra vì dữ liệu đi qua nhiều lớp của hệ thống.
+
 \newpage

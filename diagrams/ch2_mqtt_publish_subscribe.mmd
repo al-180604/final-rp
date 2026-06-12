@@ -1,0 +1,9 @@
+flowchart LR
+    P["Publisher<br/>Gateway hoặc Cloud"]
+    B["MQTT Broker"]
+    S1["Subscriber 1<br/>Cloud Backend"]
+    S2["Subscriber 2<br/>Gateway"]
+
+    P -->|"Publish: topic + payload"| B
+    B -->|"Chuyển message theo subscription"| S1
+    B -->|"Chuyển message theo subscription"| S2

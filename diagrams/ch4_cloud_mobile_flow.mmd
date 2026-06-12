@@ -1,0 +1,17 @@
+flowchart LR
+    A["Mobile App<br/>Flutter"]
+    API["FastAPI routers"]
+    AUTH["Xác thực và<br/>kiểm soát truy cập"]
+    DB[("PostgreSQL")]
+    MQ["MQTT service"]
+    W["Timeout worker<br/>Offline reaper"]
+    B["MQTT Broker"]
+
+    A <-->|"REST API + access token"| API
+    API --> AUTH
+    AUTH <--> DB
+    API <--> DB
+    API --> MQ
+    MQ <--> B
+    MQ <--> DB
+    W <--> DB

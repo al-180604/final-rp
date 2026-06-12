@@ -1,0 +1,23 @@
+sequenceDiagram
+    actor User as Người dùng
+    participant App as Mobile App
+    participant Cloud as Cloud Backend
+    participant DB as Database
+    participant Broker as MQTT Broker
+    participant Gateway
+    participant Light as Đèn Zigbee
+
+    User->>App: Chọn bật đèn
+    App->>Cloud: POST command + access token
+    Cloud->>Cloud: Xác thực và kiểm tra phạm vi
+    Cloud->>DB: Lưu command = accepted
+    Cloud->>Broker: Publish command request
+    Broker->>Gateway: Chuyển command request
+    Gateway->>Light: ZCL On command
+    Light-->>Gateway: Attribute report
+    Gateway-->>Broker: Command reply + reported state
+    Broker-->>Cloud: Chuyển phản hồi
+    Cloud->>DB: Cập nhật command và state
+    App->>Cloud: GET command status
+    Cloud-->>App: executed / failed / timeout
+    App-->>User: Hiển thị kết quả

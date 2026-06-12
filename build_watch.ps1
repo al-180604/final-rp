@@ -49,6 +49,8 @@ function Build-LaTeX {
         "-synctex=1",
         "-interaction=nonstopmode",
         "-file-line-error",
+        "-aux-directory=$OUT_DIR",
+        "-include-directory=$OUT_DIR",
         "-output-directory=$OUT_DIR",
         $MAIN_TEX
     )
@@ -59,7 +61,7 @@ function Build-LaTeX {
     $stdErr1 = Join-Path $OUT_DIR "build_stderr_1.log"
     
     # Run pdflatex directly to be robust and get correct exit code
-    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut1 2> $stdErr1
+    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-aux-directory=$OUT_DIR" "-include-directory=$OUT_DIR" "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut1 2> $stdErr1
     $exitCode1 = $LASTEXITCODE
     Write-Host "DEBUG: exitCode1 is $exitCode1" -ForegroundColor Yellow
     
@@ -86,7 +88,7 @@ function Build-LaTeX {
     $stdOut2 = Join-Path $OUT_DIR "build_stdout_2.log"
     $stdErr2 = Join-Path $OUT_DIR "build_stderr_2.log"
     
-    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut2 2> $stdErr2
+    & pdflatex -synctex=1 -interaction=nonstopmode -file-line-error "-aux-directory=$OUT_DIR" "-include-directory=$OUT_DIR" "-output-directory=$OUT_DIR" $MAIN_TEX > $stdOut2 2> $stdErr2
     $exitCode2 = $LASTEXITCODE
     
     if ($exitCode2 -ne 0) {

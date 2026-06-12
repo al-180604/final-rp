@@ -5,22 +5,22 @@
 \label{ch:lythuyet}
 
 \vspace{0.5cm}
-\noindent\textit{Chương 2 trình bày các cơ sở lý thuyết và công nghệ được sử dụng để xây dựng hệ thống IoT Zigbee Smart Building. Nội dung gồm mô hình IoT trong tòa nhà thông minh, mạng Zigbee, mô hình thiết bị theo Zigbee Cluster Library, vai trò của Gateway, giao thức MQTT, giao tiếp giữa Host và EFR32 NCP, Cloud Backend, Mobile App, firmware/OTA và một số vấn đề bảo mật cơ bản. Các phần dưới đây được trình bày ở mức nền tảng để làm cơ sở cho phần thiết kế và triển khai ở các chương sau, không đi vào log chạy thử hay kết quả thực nghiệm.}
+\noindent\textit{Chương 2 trình bày cơ sở lý thuyết và công nghệ dùng để xây dựng hệ thống Internet of Things (IoT) cho Smart Building. Nội dung gồm khái niệm tòa nhà thông minh, mạng Zigbee, mô hình thiết bị theo Zigbee Cluster Library, vai trò của Gateway, giao thức MQTT, giao tiếp giữa Host và EFR32 NCP, Cloud Backend, ứng dụng di động và các nguyên tắc bảo mật cơ bản. Chương chỉ trình bày kiến thức nền, không đi vào mã nguồn hoặc kết quả thực nghiệm.}
 \vspace{0.5cm}
 
 % ========================================
-\section{Tổng quan IoT và Smart Building}
+\section{Khái niệm Smart Building và IoT}
 \label{sec:ch2-iot-smart-building}
 
-Internet of Things (IoT), hay Internet vạn vật, là mô hình kết nối các thiết bị vật lý với phần mềm thông qua mạng truyền thông. Thiết bị trong hệ thống IoT thường có cảm biến, bộ xử lý, phần mềm nhúng và khả năng trao đổi dữ liệu với các thành phần khác. Trong phạm vi đồ án, IoT được xét theo hướng ứng dụng trong một phòng/lab thông minh, nơi thiết bị có thể gửi trạng thái, nhận lệnh điều khiển và phối hợp với phần mềm phía trên.
+Smart Building, hay tòa nhà thông minh, là công trình sử dụng cảm biến, thiết bị chấp hành, mạng truyền thông và phần mềm để giám sát hoặc điều khiển các chức năng trong tòa nhà. Mục tiêu không chỉ là điều khiển từ xa mà còn là tạo vòng phản hồi: thu thập trạng thái, xử lý dữ liệu, thực hiện hành động và ghi nhận kết quả. Trong đề tài này, phạm vi Smart Building được thu nhỏ thành mô hình một phòng thông minh có đèn, công tắc, cảm biến chuyển động, Gateway, Cloud Backend và ứng dụng di động.
 
-Smart Building là một hướng ứng dụng của IoT trong môi trường tòa nhà. Hệ thống thường bao gồm sensor (cảm biến), actuator (thiết bị chấp hành), Gateway (cổng kết nối), Cloud Backend (dịch vụ phía máy chủ) và App (ứng dụng người dùng). Sensor dùng để thu thập trạng thái, ví dụ cảm biến hiện diện phát hiện có người trong phòng. Actuator thực hiện hành động vật lý như bật/tắt đèn hoặc thay đổi trạng thái thiết bị. Gateway nối mạng thiết bị cục bộ với hệ thống phần mềm. Cloud Backend lưu dữ liệu, quản lý thiết bị và cung cấp Application Programming Interface (API) cho App.
+Internet of Things (IoT), hay Internet vạn vật, là mô hình kết nối thiết bị vật lý với phần mềm thông qua mạng truyền thông. Thiết bị trong hệ thống IoT thường có cảm biến, bộ xử lý, phần mềm nhúng và khả năng trao đổi dữ liệu. Cảm biến thu thập trạng thái, thiết bị chấp hành thực hiện hành động vật lý, Gateway nối mạng thiết bị cục bộ với hệ thống phía trên, còn Cloud Backend lưu dữ liệu và cung cấp Application Programming Interface (API) cho ứng dụng.
 
 Một luồng IoT cơ bản thường bắt đầu từ việc thu thập dữ liệu, truyền dữ liệu, xử lý dữ liệu, phát sinh lệnh điều khiển và hiển thị lại trạng thái cho người dùng. Trong đồ án này, người dùng thao tác trên Flutter Mobile App; App gọi FastAPI Cloud REST API; Cloud trao đổi trạng thái và lệnh qua Mosquitto MQTT Broker; Z3Gateway C nhận bản tin MQTT và chuyển thành Zigbee command qua EFR32 NCP; thiết bị Zigbee phản hồi trạng thái theo chiều ngược lại.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.95\textwidth]{Images/ch2_iot_zigbee_system_architecture.png}
+    \includegraphics[width=0.88\textwidth]{Images/mermaid/ch2_iot_architecture.png}
     \caption{Kiến trúc tổng quát của hệ thống IoT Zigbee Smart Building}
     \label{fig:ch2-iot-zigbee-architecture}
 \end{figure}
@@ -95,7 +95,7 @@ Mesh topology cho phép một số node chuyển tiếp gói tin qua nhiều đ�
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.72\textwidth]{Images/Mesh_topology.png}
+    \includegraphics[width=0.68\textwidth]{Images/mermaid/ch2_mesh_topology.png}
     \caption{Minh họa topology dạng mesh trong mạng Zigbee}
     \label{fig:ch2-zigbee-mesh}
 \end{figure}
@@ -116,7 +116,7 @@ Tầng Network xử lý địa chỉ mạng, quá trình hình thành mạng, qu
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.78\textwidth]{Images/Zigbee_Architecture.png}
+    \includegraphics[width=0.66\textwidth]{Images/mermaid/ch2_zigbee_stack.png}
     \caption{Kiến trúc tầng giao thức Zigbee}
     \label{fig:ch2-zigbee-stack}
 \end{figure}
@@ -154,7 +154,7 @@ Việc sử dụng ZCL khiến phần phát triển phức tạp hơn so với t
 
 Gateway là thành phần nối mạng thiết bị cục bộ với hệ thống phần mềm phía trên. Trong hệ thống IoT Zigbee, thiết bị Zigbee không trực tiếp giao tiếp với REST API hoặc App. Gateway vì vậy cần chuyển đổi giữa hai miền: một bên là mạng Zigbee với cluster, attribute và command; bên còn lại là Cloud, MQTT và các dữ liệu ứng dụng.
 
-Trong đồ án này, Gateway được hiểu theo kiến trúc hiện tại: Z3Gateway C Host App kết nối với EFR32 NCP và tích hợp MQTT trực tiếp thông qua \texttt{libmosquitto}. Kiến trúc Python MQTT-to-IPC bridge cũ không được dùng làm mô hình chính cho báo cáo. Luồng đúng của hệ thống là Cloud/App trao đổi qua MQTT Broker; Z3Gateway C nhận command từ MQTT; Gateway gọi Zigbee action qua Ember AF/EZSP; thiết bị Zigbee phản hồi trạng thái; Gateway publish reported state hoặc event trở lại MQTT.
+Trong đồ án này, Gateway được hiểu theo kiến trúc hiện tại: Z3Gateway C Host App kết nối với EFR32 NCP và tích hợp MQTT trực tiếp thông qua \texttt{libmosquitto}. Cloud và Mobile App trao đổi dữ liệu qua MQTT Broker; Z3Gateway C nhận command từ MQTT, gọi Zigbee action qua Ember AF/EZSP, sau đó publish reported state hoặc event trở lại MQTT khi thiết bị phản hồi.
 
 Gateway không chỉ chuyển tiếp dữ liệu thô. Thành phần này còn parse payload, xác định loại thiết bị, ánh xạ command theo \texttt{device\_type}, gọi API của Zigbee stack, chuẩn hóa telemetry và publish trạng thái. Trong một số trường hợp, Gateway cũng có thể xử lý local automation ở mức cơ bản, ví dụ sự kiện từ switch hoặc sensor dẫn đến lệnh điều khiển light.
 
@@ -170,7 +170,7 @@ Các thuật ngữ cơ bản của MQTT gồm broker, client, topic, payload, pu
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.78\textwidth]{Images/Mqtt_broker_archi.drawio.png}
+    \includegraphics[width=0.72\textwidth]{Images/mermaid/ch2_mqtt_publish_subscribe.png}
     \caption{Mô hình broker trung tâm trong MQTT}
     \label{fig:ch2-mqtt-broker}
 \end{figure}
@@ -191,7 +191,7 @@ Network Co-Processor (NCP) là mô hình trong đó chip radio xử lý các ph�
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.72\textwidth]{Images/UART.png}
+    \includegraphics[width=0.68\textwidth]{Images/mermaid/ch2_host_ncp_uart.png}
     \caption{Minh họa giao tiếp UART giữa hai thành phần phần cứng}
     \label{fig:ch2-uart}
 \end{figure}
@@ -227,7 +227,7 @@ ORM & Ánh xạ giữa object trong code backend và bảng dữ liệu trong da
 \end{table}
 
 % ========================================
-\section{Mobile App và State Management}
+\section{Ứng dụng di động và quản lý trạng thái}
 \label{sec:ch2-mobile-state}
 
 Mobile App là lớp tương tác trực tiếp với người dùng cuối. Trong hệ thống Smart Building, người dùng cần xem trạng thái thiết bị, gửi lệnh điều khiển và theo dõi các event hoặc automation rule. App vì vậy chuyển thao tác của người dùng thành request gửi lên Cloud Backend, đồng thời trình bày lại dữ liệu mà Backend cung cấp.
@@ -239,30 +239,16 @@ State management là cách App quản lý và cập nhật trạng thái giao di
 Ưu điểm của việc để App làm việc qua REST API là kiến trúc rõ ràng và dễ kiểm thử. Hạn chế là cập nhật realtime có thể chưa mượt nếu chỉ dựa vào request/response. Vì vậy, trong phạm vi Chương 2, App được trình bày như lớp monitoring/control cho người dùng; chi tiết màn hình và luồng thao tác được trình bày ở chương thiết kế hoặc triển khai.
 
 % ========================================
-\section{Firmware, Bootloader và OTA}
-\label{sec:ch2-firmware-ota}
-
-Firmware là phần mềm chạy trực tiếp trên thiết bị nhúng. Khác với ứng dụng mobile hoặc backend chạy trên hệ điều hành tổng quát, firmware làm việc gần hơn với phần cứng như radio, GPIO, cảm biến và bộ nhớ flash. Trong hệ thống Zigbee, firmware quyết định thiết bị hoạt động như light, switch, occupancy sensor hay NCP coordinator.
-
-Bootloader là chương trình nhỏ chạy trước firmware chính, hỗ trợ nạp, kiểm tra hoặc cập nhật firmware \cite{silabs-ug489}. Trong quá trình phát triển, firmware artifact như file \texttt{.s37} có thể được dùng để flash thiết bị bằng công cụ của Silicon Labs. Artifact không phải là chức năng mà người dùng cuối thao tác trực tiếp, nhưng là đầu ra cần thiết khi build và nạp firmware cho board.
-
-Over-the-Air (OTA) là cơ chế cập nhật firmware qua mạng thay vì flash thủ công qua máy tính \cite{silabs-ota}. Với Zigbee OTA, hệ thống thường cần OTA image, quản lý version, kiểm tra tính toàn vẹn, OTA server/client và quá trình truyền firmware theo từng phần. OTA có ý nghĩa khi số lượng thiết bị tăng lên hoặc thiết bị được lắp ở vị trí khó tiếp cận.
-
-OTA cũng làm hệ thống phức tạp hơn vì liên quan đến phân phối firmware, xử lý lỗi cập nhật, kiểm tra version, bảo mật image và khả năng khôi phục khi cập nhật thất bại. Do đó, trong báo cáo này, OTA được trình bày chủ yếu như nền tảng công nghệ và hướng phát triển. Nhóm thực hiện không khẳng định OTA end-to-end đã hoàn chỉnh nếu chưa có bằng chứng triển khai đầy đủ trong các chương sau.
-
-% ========================================
-\section{Security trong Zigbee và IoT}
+\section{Bảo mật trong Zigbee và IoT}
 \label{sec:ch2-security}
 
-Security trong hệ thống IoT cần được xem xét ở nhiều lớp, từ thiết bị, mạng Zigbee, Gateway, MQTT Broker, Cloud Backend, Database đến App. Với Smart Building, sự cố bảo mật có thể dẫn đến mất dữ liệu hoặc làm sai lệch hành vi điều khiển thiết bị vật lý. Vì vậy, báo cáo cần nêu các nguyên tắc bảo mật cơ bản trước khi đi vào phần thiết kế hệ thống.
+Bảo mật cần được xem xét ở nhiều lớp, từ thiết bị, mạng Zigbee, Gateway, MQTT Broker, Cloud Backend, cơ sở dữ liệu đến ứng dụng. Với Smart Building, sự cố bảo mật có thể dẫn đến mất dữ liệu hoặc làm sai lệch hành vi điều khiển thiết bị vật lý. Vì vậy, thiết kế phải kiểm soát cả thiết bị tham gia mạng, kênh truyền và quyền của người dùng.
 
 Ở lớp Zigbee, các khái niệm cần chú ý gồm network key, application security và Trust Center. Network key giúp bảo vệ truyền thông trong cùng một mạng Zigbee. Trust Center liên quan đến việc quản lý thiết bị tham gia mạng và phân phối khóa trong một số mô hình bảo mật. Khi thiết bị join mạng, hệ thống cần kiểm soát thiết bị nào được phép tham gia và quá trình trao đổi khóa được thực hiện như thế nào.
 
-Ở lớp MQTT và Cloud, broker cần có authentication, phân quyền topic và trong môi trường production nên cân nhắc Transport Layer Security (TLS). Cloud Backend cần kiểm soát quyền truy cập API, kiểm tra dữ liệu đầu vào và bảo vệ database. App cũng cần xử lý token hoặc thông tin đăng nhập cẩn thận để tránh người dùng không hợp lệ gửi command điều khiển thiết bị.
+Ở lớp MQTT và Cloud, broker cần xác thực client, giới hạn quyền trên topic và bảo vệ kênh truyền bằng Transport Layer Security (TLS). Cloud Backend cần xác thực người dùng, kiểm tra vai trò, giới hạn phạm vi nhà/thiết bị, kiểm tra dữ liệu đầu vào và bảo vệ cơ sở dữ liệu. Ứng dụng cũng cần lưu token trong vùng lưu trữ bảo mật thay vì tệp cấu hình thông thường.
 
-Firmware security là lớp bảo mật quan trọng khác. Firmware signing giúp giảm rủi ro thiết bị nhận firmware giả mạo. Với OTA, yêu cầu bảo mật còn cao hơn vì firmware được truyền qua mạng. Tuy nhiên, các cơ chế như install-code Trust Center join, APS encryption hardening, GBL signing hoặc MQTT mTLS chỉ được xem là nền tảng hoặc hướng phát triển nếu chưa có bằng chứng hoàn thiện trong hệ thống hiện tại.
-
-Việc tăng cường security giúp hệ thống an toàn hơn nhưng cũng làm quá trình triển khai, vận hành và debug phức tạp hơn. Vì vậy, đồ án cần trình bày đúng phạm vi: nêu nguyên tắc bảo mật nền tảng, chỉ khẳng định những phần có evidence, và đưa các cơ chế nâng cao vào hướng phát triển khi chưa triển khai đầy đủ.
+Tăng cường bảo mật làm quá trình triển khai, vận hành và gỡ lỗi phức tạp hơn. Sự đánh đổi này cần được kiểm soát bằng cấu hình môi trường, test quyền truy cập và log có định danh rõ ràng. Báo cáo chỉ khẳng định các cơ chế đã có source và test tương ứng.
 
 % ========================================
 \section{Công nghệ sử dụng trong đồ án}

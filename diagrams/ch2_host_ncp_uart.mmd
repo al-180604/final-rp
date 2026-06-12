@@ -1,0 +1,9 @@
+flowchart LR
+    H["Host Gateway<br/>Ứng dụng C"]
+    U["UART + ASH<br/>Kênh serial tin cậy"]
+    E["EZSP<br/>Lệnh và callback Zigbee"]
+    N["EFR32 NCP<br/>Zigbee stack và radio"]
+
+    H <--> U
+    U <--> E
+    E <--> N

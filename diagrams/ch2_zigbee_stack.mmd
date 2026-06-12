@@ -1,0 +1,8 @@
+flowchart TB
+    APP["Application Objects và ZCL<br/>Cluster, attribute, command"]
+    APS["Application Support<br/>Binding và addressing"]
+    NWK["Network Layer<br/>Join, địa chỉ và định tuyến"]
+    MAC["IEEE 802.15.4 MAC<br/>Truy cập kênh và frame"]
+    PHY["IEEE 802.15.4 PHY<br/>Radio và kênh tần số"]
+
+    APP --> APS --> NWK --> MAC --> PHY
