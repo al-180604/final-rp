@@ -52,6 +52,26 @@ Cần Gateway & Thiết bị Zigbee không giao tiếp trực tiếp với App/C
 \end{tabular}
 \end{table}
 
+Để lựa chọn công nghệ truyền thông cho lớp thiết bị cục bộ, cần so sánh Zigbee với một số công nghệ IoT liên quan theo phạm vi của đồ án. Bảng \ref{tab:ch2-iot-protocol-comparison} không nhằm kết luận công nghệ nào tốt nhất trong mọi trường hợp, mà làm rõ công nghệ nào phù hợp hơn với mô hình phòng/lab gồm cảm biến, công tắc, đèn, Gateway và Cloud/App.
+
+\begin{table}[H]
+\centering
+\caption{So sánh một số công nghệ IoT theo phạm vi đồ án}
+\label{tab:ch2-iot-protocol-comparison}
+\small
+\begin{tabular}{|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{4.8cm}|>{\raggedright\arraybackslash}p{5.2cm}|}
+\hline
+\textbf{Công nghệ} & \textbf{Điểm mạnh chính} & \textbf{Đánh giá với phạm vi đồ án} \\ \hline
+Zigbee & Công suất thấp, hỗ trợ mesh, có mô hình thiết bị và hệ sinh thái Smart Home/Building đã phổ biến \cite{csa-zigbee-page}. & Phù hợp với các node light, switch và motion sensor truyền trạng thái hoặc lệnh nhỏ trong mạng cục bộ. Cần Gateway để nối lên Cloud/App. \\ \hline
+Wi-Fi và Wi-Fi HaLow & Wi-Fi thuận tiện khi thiết bị cần kết nối IP trực tiếp; Wi-Fi HaLow được định hướng cho ứng dụng IoT công suất thấp và phạm vi rộng hơn Wi-Fi truyền thống \cite{wifi-halow}. & Phù hợp hơn với thiết bị cần băng thông hoặc IP trực tiếp. Với sensor/actuator nhỏ trong đồ án, dùng Wi-Fi cho từng node có thể làm tăng yêu cầu năng lượng và cấu hình mạng. \\ \hline
+Thread & Thread là mạng mesh công suất thấp dựa trên Internet Protocol (IP), sử dụng IEEE 802.15.4 và không phụ thuộc vào một application layer cố định \cite{thread-benefits}. & Có hướng phát triển tốt cho hệ sinh thái IP-based, nhưng đồ án hiện đã có thiết bị Zigbee, Zigbee Cluster Library và Z3Gateway C; chuyển sang Thread sẽ làm thay đổi stack thiết bị và Gateway. \\ \hline
+Long Range Wide Area Network (LoRaWAN) & LoRaWAN là giao thức Low Power Wide Area Network (LPWAN), phù hợp kết nối thiết bị dùng pin ở phạm vi xa \cite{lorawan-spec}. & Phù hợp hơn với bài toán cảm biến phân tán ngoài trời hoặc nhiều khu vực xa nhau. Phạm vi phòng/lab của đồ án không cần đánh đổi độ trễ và băng thông thấp theo hướng LPWAN. \\ \hline
+Matter & Matter là giao thức Smart Home mở, chạy trên các nền mạng như Wi-Fi, Thread và Ethernet để tăng khả năng liên thông giữa hệ sinh thái \cite{matter-faq}. & Matter có thể là hướng mở rộng interoperability sau này, nhưng không thay thế trực tiếp lớp Zigbee runtime hiện tại của đồ án. \\ \hline
+\end{tabular}
+\end{table}
+
+Từ bảng so sánh, Zigbee được chọn không phải vì luôn vượt trội hơn mọi giao thức IoT khác, mà vì khớp với bài toán cụ thể: thiết bị công suất thấp, bản tin nhỏ, có thể mở rộng mesh và có mô hình chức năng thiết bị rõ ràng qua ZCL. Cách lựa chọn này cũng giữ kiến trúc báo cáo nhất quán với triển khai thực tế: thiết bị Zigbee giao tiếp với Gateway, Gateway chuyển đổi sang MQTT, còn Cloud/App không cần xử lý trực tiếp chi tiết mạng Zigbee.
+
 Trong đồ án, Zigbee được dùng cho lớp thiết bị cục bộ. EFR32 NCP đóng vai trò radio coordinator, còn các thiết bị như Light, Switch và Occupancy Sensor là các thiết bị Zigbee trong mạng. Nhờ đó, phần thiết bị nhúng được tách khỏi phần Cloud/App, đồng thời vẫn có thể đồng bộ trạng thái và nhận lệnh điều khiển thông qua Gateway.
 
 % ========================================

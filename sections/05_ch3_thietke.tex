@@ -12,6 +12,8 @@ Hệ thống được thiết kế cho mô hình thử nghiệm trong một phò
 
 Thiết bị Zigbee không giao tiếp trực tiếp với Internet. Gateway đặt tại mạng cục bộ duy trì kết nối với bộ xử lý mạng EFR32, chuyển dữ liệu Zigbee thành bản tin MQTT và thực hiện chiều ngược lại đối với lệnh điều khiển. Cloud Backend cung cấp giao diện cho Mobile App, lưu dữ liệu bền vững và kiểm soát quyền truy cập. Mobile App là lớp tương tác với người dùng, không kết nối trực tiếp tới thiết bị hoặc Gateway.
 
+Với phạm vi này, Zigbee được chọn làm mạng thiết bị cục bộ vì hệ thống cần các node công suất thấp, trao đổi bản tin nhỏ và có khả năng mở rộng theo mesh. Các công nghệ như Wi-Fi, Thread, LoRaWAN hoặc Matter có ưu điểm riêng, nhưng sẽ làm thay đổi mục tiêu triển khai: Wi-Fi thiên về thiết bị IP trực tiếp, Thread cần stack và Border Router khác, LoRaWAN phù hợp hơn với phạm vi xa, còn Matter chủ yếu giải quyết interoperability ở lớp ứng dụng. Do đó, thiết kế của đồ án tập trung vào việc chứng minh luồng end-to-end Zigbee--Gateway--MQTT--Cloud/App thay vì khảo sát nhiều runtime thiết bị cùng lúc.
+
 \section{Phân tích yêu cầu hệ thống}
 \label{sec:ch3-requirements}
 
@@ -256,6 +258,7 @@ Bảng \ref{tab:ch3-tradeoffs} tổng hợp các quyết định ảnh hưởng 
 \begin{tabular}{|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{4.8cm}|>{\raggedright\arraybackslash}p{4.8cm}|}
 \hline
 \textbf{Quyết định} & \textbf{Lợi ích} & \textbf{Sự đánh đổi} \\ \hline
+Dùng Zigbee cho mạng thiết bị cục bộ & Phù hợp với light, switch và motion sensor truyền bản tin nhỏ; hỗ trợ mesh và mô hình thiết bị chuẩn. & Cần Gateway và công cụ debug Zigbee, không phù hợp cho dữ liệu dung lượng lớn. \\ \hline
 Dùng Gateway C kết nối MQTT trực tiếp & Giảm một tiến trình trung gian và bám sát Zigbee host stack. & Cần quản lý bộ nhớ, hàng đợi và lỗi đồng thời cẩn thận. \\ \hline
 Dùng MQTT giữa Cloud và Gateway & Hỗ trợ hai chiều, tách bên gửi và bên nhận. & Cần quản lý topic, quyền truy cập, bản tin giữ lại và trạng thái kết nối. \\ \hline
 Lưu lệnh trước khi phát MQTT & Theo dõi được vòng đời và lỗi thời gian chờ. & Tăng số thao tác cơ sở dữ liệu và cần đồng bộ phản hồi. \\ \hline
