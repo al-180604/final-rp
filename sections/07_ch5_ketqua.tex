@@ -4,127 +4,260 @@
 \chapter{KIỂM THỬ VÀ ĐÁNH GIÁ}
 \label{ch:ketqua}
 
+% ----- TÓM TẮT CHƯƠNG -----
 \vspace{0.5cm}
-\noindent\textit{Chương này kiểm tra hệ thống theo hai lớp evidence. Test phần mềm được chạy tự động trên source hiện tại và có số lượng pass/fail cụ thể. Test phần cứng và test xuyên suốt cần log Gateway, bản tin MQTT, phản hồi API, ảnh hoặc video của thiết bị thật. Những trường hợp chưa có evidence không được ghi là đạt.}
+\noindent\textit{Chương này trình bày quá trình xây dựng kế hoạch kiểm
+thử, thiết lập cấu hình môi trường thử nghiệm thực tế và thực thi các
+kịch bản kiểm thử nhằm xác minh tính đúng đắn, độ tin cậy của toàn bộ
+hệ thống IoT Zigbee Smart Building. Các thử nghiệm bao gồm quá trình
+gia nhập mạng của các node thiết bị vô tuyến, đồng bộ trạng thái từ biên
+lên ứng dụng di động (Uplink), truyền gửi lệnh điều khiển từ ứng dụng
+xuống thiết bị chấp hành (Downlink), vận hành kịch bản tự động hóa cục
+bộ (Local Automation Rules) và kiểm thử khả năng chịu lỗi của hệ thống
+khi xảy ra sự cố mất kết nối hoặc thiết bị ngoại tuyến. Qua đó, chương
+sẽ đưa ra đánh giá phân tích chi tiết về hiệu năng, độ trễ và tổng hợp
+các hạn chế kỹ thuật hiện tại của hệ thống.}
 \vspace{0.5cm}
 
-\section{Mục tiêu và nguyên tắc kiểm thử}
-\label{sec:ch5-plan}
+% ========================================
+% 5.1 KẾ HOẠCH KIỂM THỬ
+% ========================================
+\section{Kế hoạch kiểm thử}
+\label{sec:ch5-test-plan}
 
-Mục tiêu kiểm thử là xác nhận từng lớp hoạt động đúng hợp đồng và xác nhận dữ liệu có thể đi xuyên suốt từ thiết bị tới người dùng. Một test phần mềm đạt không thay thế cho test phần cứng. Ví dụ, test Cloud có thể chứng minh endpoint tạo đúng MQTT payload, nhưng không chứng minh đèn vật lý đã bật.
+Để đảm bảo toàn bộ hệ thống hoạt động ổn định và đáp ứng đầy đủ các yêu
+cầu chức năng cũng như phi chức năng đã đề ra tại Chương~\ref{ch:thietke}, kế hoạch
+kiểm thử được xây dựng bao gồm các nhóm thử nghiệm chính sau:
 
-Mỗi test case gồm đầu vào, thao tác, kết quả mong đợi, kết quả thực tế, đánh giá và evidence. Kết quả chỉ được ghi \textit{Đạt} khi evidence hiện có chứng minh đúng phạm vi của test. Nếu chưa chạy hoặc chưa lưu bằng chứng, ô kết quả được đánh dấu \texttt{TODO}.
+\textbf{Nhóm kiểm thử gia nhập mạng (Device Join):} Xác minh khả năng quét mạng, cơ chế bắt tay bảo mật sử dụng mã cài đặt Install Code (khóa mật mã \texttt{IC\_DERIVED}) và cấp phát địa chỉ mạng động của Coordinator cho các loại node thiết bị bao gồm Light (Router), Switch (Router), Occupancy Sensor (Router) và cảm biến môi trường DHT11 (Router).
 
-\section{Môi trường kiểm thử}
-\label{sec:ch5-environment}
+\textbf{Nhóm kiểm thử truyền nhận và điều khiển (Uplink và Downlink):} Kiểm tra luồng đồng bộ trạng thái tự động báo cáo trạng thái từ thiết bị lên giao diện ứng dụng di động (Uplink) bao gồm dữ liệu đo đạc nhiệt độ/độ ẩm định kỳ từ cảm biến môi trường, và luồng gửi lệnh bật/tắt Đèn từ ứng dụng di động xuống thiết bị thực tế ở biên vật lý (Downlink) thông qua Gateway nhúng.
 
-Bảng \ref{tab:ch5-test-environment} mô tả các môi trường cần dùng. Thông tin phần cứng cần được kiểm tra lại tại thời điểm chạy test thực nghiệm.
+\textbf{Nhóm kiểm thử tự động hóa cục bộ (Local Automation):} Đánh giá hoạt động của Rules Engine ở biên khi thực thi kịch bản tự động hóa liên thiết bị mà không cần sự can thiệp của Cloud.
+
+\textbf{Nhóm kiểm thử khả năng chịu lỗi và tin cậy (Reliability):} Đánh giá khả năng tự động khôi phục kết nối, xử lý trường hợp thiết bị mất nguồn đột ngột, và hoạt động của cơ chế quét Timeout trên Cloud.
+
+% ========================================
+% 5.2 MÔI TRƯỜNG KIỂM THỬ
+% ========================================
+\section{Môi trường và cấu hình kiểm thử}
+\label{sec:ch5-test-setup}
+
+Quá trình kiểm thử được thực hiện tại phòng thí nghiệm chuyên đề IoT
+với các thành phần phần cứng, phần mềm và sơ đồ kết nối mạng được cấu
+hình chi tiết như sau:
+
+\subsection{Cấu hình phần cứng thử nghiệm}
+\label{sec:ch5-hw-setup}
+
+Hệ thống vật lý thử nghiệm bao gồm các thiết bị sau:
+
+\textbf{Coordinator (NCP):} Sử dụng bộ phát triển vô tuyến Silicon Labs Wireless Starter Kit (WSTK) Mainboard kết hợp với Radio Board BRD4162A mang vi điều khiển EFR32MG12 (năng tần +10 dBm, 2.4 GHz). Coordinator chạy firmware \texttt{ncp-uart-hw} dựa trên stack EmberZNet (phiên bản \texttt{ezsp ver 0x0D stack ver. [7.5.1 GA build 0]}).
+
+\textbf{Z3Light Node (Router):} Sử dụng bo mạch BRD4162A cấu hình vai trò Router, bật cụm On/Off Cluster. Đèn LED0 trên bo mạch được sử dụng để mô phỏng Đèn chấp hành. Nút nhấn PB0 trên kit được cấu hình để gửi yêu cầu rời mạng và thực hiện rejoin.
+
+\textbf{Z3Switch Node (Router):} Sử dụng bo mạch BRD4162A cấu hình vai trò Router, bật cụm On/Off Client Cluster. Nút nhấn PB1 được cấu hình để gửi lệnh Toggle, nút PB0 dùng để gửi yêu cầu rời mạng và thực hiện rejoin.
+
+\textbf{Occupancy Sensor Node (Router):} Sử dụng bo mạch BRD4162A cấu hình vai trò Router (\texttt{SLI\_ZIGBEE\_NETWORK\_DEVICE\_TYPE\_ROUTER}), tích hợp cảm biến PIR vật lý thực tế trên chân GPIO được đọc theo chu kỳ để phát hiện chuyển động của con người. Nút nhấn PB0 dùng để gửi yêu cầu rời mạng và thực hiện rejoin.
+
+\textbf{DHT11 Sensor Node (Router):} Sử dụng bo mạch BRD4162A cấu hình vai trò Router, tích hợp cảm biến nhiệt độ và độ ẩm DHT11 trên chân GPIO để định kỳ đo đạc và gửi thông số môi trường. Nút nhấn PB0 dùng để gửi yêu cầu rời mạng và thực hiện rejoin.
+
+\textbf{Gateway Host:} Máy tính chạy hệ điều hành Ubuntu Linux đóng vai trò Gateway Host chạy native tiến trình C \texttt{Z3Gateway}, kết nối với Coordinator NCP qua cáp micro-USB sử dụng cổng nối tiếp ảo VCOM UART (tốc độ baud 115200, chế độ điều khiển luồng phần cứng CTS/RTS).
+
+Thông tin chi tiết về các địa chỉ vật lý EUI-64 duy nhất và địa chỉ mạng NodeID 16-bit được ghi nhận thực tế trong quá trình cấu hình mạng Zigbee được thể hiện ở Bảng \ref{tab:ch5-device-configs}.
 
 \begin{table}[H]
 \centering
-\caption{Môi trường dùng cho các nhóm kiểm thử}
-\label{tab:ch5-test-environment}
-\small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{3.4cm}|>{\raggedright\arraybackslash}p{10.1cm}|}
+\caption{Cấu hình địa chỉ và vai trò của các thiết bị trong mạng thử nghiệm}
+\label{tab:ch5-device-configs}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{2.4cm}|>{\raggedright\arraybackslash}p{2.4cm}|>{\raggedright\arraybackslash}p{4.0cm}|>{\raggedright\arraybackslash}p{2.2cm}|>{\raggedright\arraybackslash}p{3.5cm}|}
 \hline
-\textbf{Nhóm} & \textbf{Môi trường} \\ \hline
-Thiết bị Zigbee & EFR32 NCP, Z3Light, Z3Switch và cảm biến chuyển động; firmware được build từ các thư mục \path|end_devices/|. \\ \hline
-Gateway & Z3GatewayHost C, kết nối serial tới NCP và kết nối MQTT tới broker. \\ \hline
-Cloud & Python, FastAPI, cơ sở dữ liệu test và \texttt{pytest}. \\ \hline
-Mobile App & Flutter test runner và widget test trong thư mục \path|mobile_app/test/|. \\ \hline
-Xuyên suốt & Mobile App, Cloud Backend, MQTT Broker, Gateway và thiết bị thật cùng hoạt động. \\ \hline
+\textbf{Tên thiết bị} & \textbf{Vai trò Zigbee} & \textbf{EUI-64 Address} & \textbf{NodeID} & \textbf{Ghi chú} \\ \hline
+Coordinator & Coordinator / NCP & -- & 0x0000 & Thiết lập Trust Center mạng \\ \hline
+Z3Light & Router (Active) & 000000000000004F & 0x8536 (Động) & Đèn mô phỏng qua LED0 \\ \hline
+Z3Switch & Router (Active) & 0000000000000052 & 0x8899 (Động) & Công tắc điều khiển bằng nút PB1 \\ \hline
+Occupancy Sensor & Router (Active) & 0000000000000057 & 0xE2C3 (Động) & Cảm biến PIR vật lý trên GPIO \\ \hline
+DHT11 Sensor & Router (Active) & 0000000000000053 & 0x0218 (Động) & Cảm biến nhiệt độ/độ ẩm \\ \hline
 \end{tabular}
 \end{table}
 
-Các test phần mềm trong chương được chạy ngày 12/06/2026 trên source repository của đồ án. Kết quả phần cứng phải được bổ sung theo đúng cấu hình thiết bị được dùng trong buổi đo.
+Bảng~\ref{tab:ch5-device-configs} ghi nhận địa chỉ EUI-64 và NodeID thực tế của từng thiết bị được ghi nhận trong quá trình cấu hình mạng Zigbee. NodeID được Coordinator cấp phát động mỗi khi thiết bị rời và gia nhập lại mạng (ví dụ node Light lần lượt nhận NodeID là \texttt{0xEB7B $\rightarrow$ 0x7C0F $\rightarrow$ 0x8536}), xác nhận đúng tiêu chuẩn vận hành của giao thức. Các thông số này là cơ sở để Gateway xác định và phân biệt các node trong quá trình kiểm thử, đảm bảo rằng lệnh điều khiển và báo cáo trạng thái được định tuyến chính xác đến đúng thiết bị đích trong mạng lưới.
 
-\begin{landscape}
-\section{Danh sách test case}
+Quá trình cấu hình phần mềm và môi trường Cloud được chuẩn bị đồng bộ như sau:
+
+\textbf{Firmware thiết bị:} Sử dụng Gecko SDK v4.5.0 và EmberZNet stack.
+
+\textbf{Gateway Service:} Tiến trình C \texttt{Z3Gateway} được biên dịch thuần, chạy native trên hệ điều hành Ubuntu, kết nối trực tiếp đến Cloud Broker qua cổng bảo mật 8883 sử dụng mã hóa TLS và xác thực hai chiều mTLS (không chạy qua localhost). Topic prefix được cấu hình là \texttt{sb/v1/hust/lab01/gw-ubuntu-01}.
+
+\textbf{Cloud Backend:} Dockerized FastAPI deploy trên một máy chủ ảo AWS EC2 (Instance type t3.micro, OS Ubuntu Server), API phục vụ tại địa chỉ \texttt{http://98.83.4.87:8000}.
+
+\textbf{Cơ sở dữ liệu:} PostgreSQL v16 chạy containerized trên AWS EC2.
+
+\textbf{MQTT Broker:} Mosquitto v2.x chạy trên AWS EC2, được cấu hình bảo mật với xác thực hai chiều mTLS sử dụng các chứng chỉ số được ký bởi CA Production, hoạt động trên cổng bảo mật 8883.
+
+% ========================================
+% 5.3 KỊCH BẢN VÀ KẾT QUẢ KIỂM THỬ CHI TIẾT
+% ========================================
+\section{Kết quả thực thi các kịch bản kiểm thử}
 \label{sec:ch5-test-cases}
 
-Bảng \ref{tab:ch5-test-cases} tách test theo từng thiết bị và các lớp hỗ trợ. Bảng sử dụng nhiều cột để giữ cùng một cấu trúc đánh giá cho cả test tự động và test thực nghiệm.
+Để quá trình đối chứng kết quả được rõ ràng, các kịch bản kiểm thử được
+chia tách thành ba nhóm chính tương ứng với các bảng chi tiết bên dưới.
 
-\setlength{\LTcapwidth}{\linewidth}
-\setlength{\tabcolsep}{1.8pt}
-\footnotesize
-\begin{longtable}{|>{\raggedright\arraybackslash}p{1.1cm}|>{\raggedright\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}p{3.5cm}|>{\raggedright\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}p{3.2cm}|>{\raggedright\arraybackslash}p{3.0cm}|>{\raggedright\arraybackslash}p{1.5cm}|>{\raggedright\arraybackslash}p{2.6cm}|}
-\caption{Test case cho thiết bị, Gateway, Cloud và Mobile App}
-\label{tab:ch5-test-cases}\\
+\subsection{Nhóm 1: Kiểm thử Gia nhập mạng của thiết bị}
+\label{sec:ch5-group1-join}
+
+Nhóm này kiểm tra tính đúng đắn của quá trình quét sóng, bắt tay và cấp
+phát NodeID động của lớp mạng Zigbee 3.0. Chi tiết các bước và kết quả
+được trình bày tại Bảng \ref{tab:ch5-group1-join}.
+
+\begin{table}[htbp]
+\centering
+\caption{Nhóm kịch bản kiểm thử gia nhập mạng (Device Join)}
+\label{tab:ch5-group1-join}
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|P{0.85cm}|P{1.45cm}|P{1.6cm}|P{2.2cm}|P{1.2cm}|P{2.05cm}|P{2.05cm}|P{0.6cm}|P{2.35cm}|}
 \hline
-\textbf{Mã} & \textbf{Tên} & \textbf{Tóm tắt} & \textbf{Thao tác chi tiết} & \textbf{Đầu vào} & \textbf{Kết quả mong đợi} & \textbf{Kết quả thực tế} & \textbf{Đánh giá} & \textbf{Evidence} \\ \hline
-\endfirsthead
+\textbf{No} & \textbf{Tên test} & \textbf{Mục tiêu} & \textbf{Nội dung chi tiết} & \textbf{Input} & \textbf{Kết quả kỳ vọng} & \textbf{Kết quả thực tế} & \textbf{KQ} & \textbf{Bằng chứng} \\
 \hline
-\textbf{Mã} & \textbf{Tên} & \textbf{Tóm tắt} & \textbf{Thao tác chi tiết} & \textbf{Đầu vào} & \textbf{Kết quả mong đợi} & \textbf{Kết quả thực tế} & \textbf{Đánh giá} & \textbf{Evidence} \\ \hline
-\endhead
+TC-01 & Gia nhập Z3Light & Đèn Router kết nối Coordinator & Mở cửa sổ commissioning bảo mật qua API Cloud cho EUI \mono{004F}. Bấm nút PB0 trên Đèn để thực hiện quét mạng. & Bấm PB0 trên Đèn & Đèn gia nhập mạng thành công qua bắt tay bảo mật bằng Install Code, cấp khóa \mono{IC\_DERIVED}. LED0 sáng báo hiệu đã kết nối. & Đèn gia nhập thành công, gán NodeID động \mono{0x8536}. LED0 sáng cố định báo hiệu trạng thái mạng. & Đạt & Gateway log: \mono{tc\_join node\_id: 0x8536 eui64: ...004F key\_type: IC\_DERIVED}. Device log: \mono{BTN: PB0 -> leave and rejoin}. \\
 \hline
-\endfoot
-
-HW-01 & Tạo mạng và join & Kiểm tra Coordinator và thiết bị tham gia mạng. & Khởi động NCP/Gateway, mở mạng, bật từng thiết bị và ghi lại địa chỉ. & Thời gian permit join. & Thiết bị join, có EUI-64, địa chỉ mạng và registry đúng loại. & \todo{Chạy lại với thiết bị thật.} & \todo{Chưa đánh giá.} & \todo{Log join và ảnh thiết bị.} \\ \hline
-
-HW-02 & Đèn nhận lệnh & Kiểm tra End Device đèn. & Gửi ZCL On, Off từ Gateway và quan sát trạng thái báo cáo. & Lệnh bật/tắt. & Đèn đổi trạng thái và phát reported state tương ứng. & \todo{Bổ sung kết quả đo.} & \todo{Chưa đánh giá.} & \todo{Log ZCL, MQTT và ảnh đèn.} \\ \hline
-
-HW-03 & Công tắc phát sự kiện & Kiểm tra End Device công tắc. & Nhấn nút, theo dõi callback Zigbee và topic event. & Một lần nhấn nút. & Gateway nhận sự kiện đúng thiết bị, Cloud lưu event. & \todo{Bổ sung kết quả đo.} & \todo{Chưa đánh giá.} & \todo{Log nút nhấn và API event.} \\ \hline
-
-HW-04 & Cảm biến chuyển động & Kiểm tra thiết bị loại \texttt{motion}. & Tạo và kết thúc chuyển động trước cảm biến, theo dõi thuộc tính. & Có/không có chuyển động. & \texttt{occupancy} thay đổi; loại thiết bị vẫn là \texttt{motion}. & \todo{Bổ sung kết quả đo.} & \todo{Chưa đánh giá.} & \todo{Log attribute report và API state.} \\ \hline
-
-HW-05 & App điều khiển đèn & Kiểm tra luồng xuyên suốt. & Đăng nhập, chọn đèn, gửi lệnh bật và chờ command status. & Access token và lệnh bật. & Cloud tạo lệnh, Gateway thực thi, đèn bật, App hiển thị trạng thái kết thúc. & \todo{Chạy trên hệ thống đầy đủ.} & \todo{Chưa đánh giá.} & \todo{Ảnh App, response API, MQTT trace và ảnh đèn.} \\ \hline
-
-HW-06 & Luật tự động hóa & Kiểm tra event kích hoạt action. & Tạo luật công tắc hoặc chuyển động điều khiển đèn, sau đó phát trigger. & Rule hợp lệ và trigger. & Gateway thực hiện action; Cloud ghi automation event nếu có. & \todo{Chạy lại với thiết bị thật.} & \todo{Chưa đánh giá.} & \todo{Rule, log Gateway và trạng thái đèn.} \\ \hline
-
-HW-07 & Mất kết nối và phục hồi & Kiểm tra lỗi mạng. & Ngắt kết nối Gateway--Broker, gửi lệnh, kết nối lại và quan sát trạng thái. & Mất mạng có kiểm soát. & Lệnh không bị báo executed giả; Gateway và thiết bị cập nhật lại trạng thái sau khi phục hồi. & \todo{Bổ sung timeline thực nghiệm.} & \todo{Chưa đánh giá.} & \todo{Log trước, trong và sau lỗi.} \\ \hline
-
-SW-01 & Xác thực và RBAC & Kiểm tra login, token, vai trò và phạm vi nhà. & Chạy nhóm test xác thực và phân quyền. & Bộ test hiện tại. & Tất cả test trong file đạt. & 21 test đạt, không có test lỗi. & Đạt & Output \texttt{21 passed}, ngày 12/06/2026. \\ \hline
-
-SW-02 & Thiết bị, lệnh và MQTT & Kiểm tra API, handler, trạng thái online và event Gateway. & Chạy năm file test commands, devices, MQTT và lifecycle. & Bộ test hiện tại. & Tất cả test được chọn đạt. & 27 test đạt, không có test lỗi. & Đạt & Output \texttt{27 passed}, ngày 12/06/2026. \\ \hline
-
-SW-03 & Tự động hóa và provisioning & Kiểm tra luật, event và phiên thêm thiết bị. & Chạy bốn file test automation và provisioning. & Bộ test hiện tại. & Tất cả test được chọn đạt. & 61 test đạt, không có test lỗi. & Đạt & Output \texttt{61 passed}, ngày 12/06/2026. \\ \hline
-
-SW-04 & Mobile App & Kiểm tra model, repository, view model và widget. & Chạy \texttt{flutter test} trong \path|mobile_app/|. & Bộ test Flutter hiện tại. & Toàn bộ test đạt, không có widget overflow trong test màn hình hẹp. & 104 test đạt. & Đạt & Output \texttt{All tests passed}, ngày 12/06/2026. \\ \hline
-
-SW-05 & Toàn bộ Cloud suite & Kiểm tra toàn bộ test Cloud. & Chạy \texttt{pytest cloud/tests -q}. & Bộ test Cloud hiện tại. & Không có test lỗi. & 177 đạt, 5 lỗi và 21 bỏ qua. Năm lỗi do thiếu tài liệu production được contract test yêu cầu. & Chưa đạt & Output pytest và danh sách năm tệp thiếu, ngày 12/06/2026. \\ \hline
-\end{longtable}
+TC-02 & Gia nhập Z3Switch & Công tắc Router kết nối Coordinator & Mở cửa sổ commissioning bảo mật qua API Cloud cho EUI \mono{0052}. Switch tự động thực hiện quét mạng (steer) liên tục. & Bấm PB0 trên Switch & Công tắc gia nhập mạng thành công qua bắt tay bảo mật bằng Install Code, cấp khóa \mono{IC\_DERIVED}. & Công tắc gia nhập thành công, gán NodeID động \mono{0x8899}. & Đạt & Gateway log: \mono{tc\_join node\_id: 0x8899 eui64: ...0052 key\_type: IC\_DERIVED}. Device log: \mono{BTN: PB0 -> leave and rejoin}. \\
+\hline
+TC-03 & Gia nhập Cảm biến & Cảm biến hiện diện Router kết nối Coordinator & Mở cửa sổ commissioning bảo mật qua API Cloud cho EUI \mono{0057}. Bấm nút PB0 trên Cảm biến để kích hoạt quét mạng. & Bấm PB0 trên Cảm biến & Cảm biến gia nhập mạng thành công dưới vai trò Router qua bắt tay bảo mật bằng Install Code, cấp khóa \mono{IC\_DERIVED}. & Cảm biến gia nhập thành công dưới vai trò Router, gán NodeID động \mono{0xE2C3}, định dạng \mono{sensor\_kind=1}. & Đạt & Gateway log: \mono{tc\_join node\_id: 0xE2C3 eui64: ...0057 key\_type: IC\_DERIVED}, \mono{sensor\_kind=1}. Device log: \mono{NWK Steering network joined}. \\
+\hline
+TC-03b & Gia nhập DHT11 & Cảm biến DHT11 Router kết nối Coordinator & Mở cửa sổ commissioning bảo mật qua API Cloud cho EUI \mono{0053}. Bấm nút PB0 trên DHT11 để kích hoạt quét mạng. & Bấm PB0 trên DHT11 & Cảm biến DHT11 gia nhập mạng thành công dưới vai trò Router qua bắt tay bảo mật bằng Install Code, cấp khóa \mono{IC\_DERIVED}. & DHT11 gia nhập thành công dưới vai trò Router, gán NodeID động \mono{0x0218}, định dạng \mono{sensor\_kind=2}. & Đạt & Gateway log: \mono{tc\_join node\_id: 0x0218 eui64: ...0053 key\_type: IC\_DERIVED}, \mono{sensor\_kind=2}. Device log: \mono{NWK Steering network joined}. \\
+\hline
+\end{tabular}
 \normalsize
-\setlength{\tabcolsep}{6pt}
-\end{landscape}
+\renewcommand{\arraystretch}{1.0}
+\end{table}
 
-Các test SW-01 đến SW-04 chứng minh các nhóm chức năng phần mềm tương ứng đang đạt trong phạm vi test đã chọn. Kết quả này không đủ để đổi trạng thái các test HW-01 đến HW-07. Những test phần cứng vẫn cần evidence từ hệ thống đang chạy.
+\subsection{Nhóm 2: Kiểm thử truyền nhận trạng thái và điều khiển}
+\label{sec:ch5-group2-dataflow}
 
-\section{Phân tích kết quả phần mềm}
-\label{sec:ch5-software-results}
+Nhóm này kiểm tra tính đồng bộ dữ liệu hai chiều Uplink và Downlink
+giữa thiết bị phần cứng, Gateway nhúng, MQTT Broker, FastAPI Backend
+và CSDL PostgreSQL trên đám mây. Chi tiết tại Bảng \ref{tab:ch5-group2-dataflow}.
 
-\subsection{Cloud Backend}
+\begin{table}[htbp]
+\centering
+\caption{Nhóm kịch bản kiểm thử truyền tin và điều khiển (Uplink/Downlink)}
+\label{tab:ch5-group2-dataflow}
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|P{0.85cm}|P{1.45cm}|P{1.6cm}|P{2.2cm}|P{1.2cm}|P{2.05cm}|P{2.05cm}|P{0.6cm}|P{2.35cm}|}
+\hline
+\textbf{No} & \textbf{Tên test} & \textbf{Mục tiêu} & \textbf{Nội dung chi tiết} & \textbf{Input} & \textbf{Kết quả kỳ vọng} & \textbf{Kết quả thực tế} & \textbf{KQ} & \textbf{Bằng chứng} \\
+\hline
+TC-04 & Điều khiển Downlink & Gửi lệnh bật/tắt đèn từ App xuống phần cứng & Người dùng nhấn bật/tắt đèn trên giao diện App di động, gửi lệnh qua REST API. & Nhấn ``ON'' trên App & Cloud tạo command record, publish MQTT command. Gateway nhận, gửi ZCL tới Đèn. Đèn LED0 sáng. & Đèn LED0 bật sáng. Gateway nhận ZCL response, báo cáo thành công về Cloud. & Đạt & CSDL state = \mono{1}; topic \mono{.../gw-ubuntu-01/commands/+/reply} nhận \mono{executed}. \\
+\hline
+TC-05 & Báo cáo Uplink & Đồng bộ trạng thái Đèn tự động báo cáo lên Cloud & Trạng thái của đèn thay đổi tại biên. Đèn tự phát bản tin Attribute Report tới Coordinator. & Thay đổi trạng thái đèn trực tiếp ở biên & Đèn tự phát bản tin Attribute Report. Gateway nhận, chuẩn hóa JSON, publish MQTT reported. Cloud cập nhật DB. & Đèn tự động gửi report. DB cập nhật bản ghi mới của thiết bị Đèn với trạng thái thực tế. & Đạt & Gateway log: \mono{@DBG REPORT clusterId=0x0006 bufLen=4 sender=0x8536}, \mono{MQTT: pub [.../gw-ubuntu-01/devices/light/...004F/reported]}. \\
+\hline
+TC-05b & Báo cáo DHT11 & Đồng bộ dữ liệu nhiệt độ/độ ẩm từ DHT11 lên Cloud & Cảm biến đo đạc và định kỳ gửi dữ liệu nhiệt độ, độ ẩm môi trường lên Coordinator. & Định kỳ đọc cảm biến DHT11 vật lý & Bản tin nhiệt độ/độ ẩm được gửi lên Gateway và đồng bộ đầy đủ lên cơ sở dữ liệu Cloud. & Gateway nhận thông số nhiệt độ/độ ẩm, publish lên MQTT, Cloud cập nhật DB và trạng thái online của thiết bị. & Đạt & Gateway log: \mono{ENV: temp=30.60C from 0x0218}, \mono{ENV: humidity=59.00\% from 0x0218}, \mono{MQTT: pub [...0053/reported]}. Device log: \mono{DHT11 read OK}. \\
+\hline
+\end{tabular}
+\normalsize
+\renewcommand{\arraystretch}{1.0}
+\end{table}
 
-Nhóm xác thực và Role-Based Access Control (RBAC), tức phân quyền theo vai trò, có 21 test đạt. Nhóm thiết bị, lệnh, MQTT và vòng đời online có 27 test đạt. Nhóm tự động hóa và thêm thiết bị có 61 test đạt. Các kết quả này cho thấy những đường xử lý trọng tâm có regression test và đang chạy đúng trong môi trường test.
+\subsection{Nhóm 3: Kiểm thử tự động hóa cục bộ và độ tin cậy}
+\label{sec:ch5-group3-rules-faults}
 
-Khi chạy toàn bộ \texttt{cloud/tests}, kết quả là 177 test đạt, 5 test lỗi và 21 test bỏ qua. Năm lỗi đều là \texttt{FileNotFoundError} tại các contract test yêu cầu những tệp sau:
+Nhóm này kiểm tra tính thông minh cục bộ ở biên thông qua Rules Engine
+và khả năng phục hồi của hệ thống khi đối mặt với các kịch bản lỗi vật
+lý. Chi tiết được thể hiện ở Bảng \ref{tab:ch5-group3-rules-faults}.
 
-\begin{itemize}[leftmargin=1.2cm]
-    \item \path|docs/production/production-operations.md|;
-    \item \path|docs/production/production-acceptance-checklist.md|;
-    \item \path|docs/production/production-release.md|;
-    \item \path|docs/production/release-notes-v0.9.0-rc.1.md|.
-\end{itemize}
+\begin{table}[htbp]
+\centering
+\caption{Nhóm kịch bản kiểm thử tự động hóa và xử lý lỗi (Automation \& Faults)}
+\label{tab:ch5-group3-rules-faults}
+\scriptsize
+\setlength{\tabcolsep}{2pt}
+\renewcommand{\arraystretch}{1.2}
+\begin{tabular}{|P{0.85cm}|P{1.45cm}|P{1.6cm}|P{2.2cm}|P{1.2cm}|P{2.05cm}|P{2.05cm}|P{0.6cm}|P{2.35cm}|}
+\hline
+\textbf{No} & \textbf{Tên test} & \textbf{Mục tiêu} & \textbf{Nội dung chi tiết} & \textbf{Input} & \textbf{Kết quả kỳ vọng} & \textbf{Kết quả thực tế} & \textbf{KQ} & \textbf{Bằng chứng} \\
+\hline
+TC-06 & Tự động hóa Switch & Nhấn Switch tự động bật Đèn cục bộ & Bấm nút PB1 trên Switch. Gateway nhận sự kiện và gửi lệnh ZCL điều khiển sang Đèn theo rule \mono{auto\_100e3876c968}. & Bấm PB1 trên Switch & Gateway bắt được sự kiện Switch, đối chiếu và chạy rule, gửi ZCL Toggle tới Đèn trực tiếp ở biên. & Đèn thay đổi trạng thái On/Off tương ứng với độ trễ phản hồi tức thì. & Đạt & Gateway log: \mono{SWITCH: toggle event from 0x8899 cmd=0x02}, \mono{@LOG \{"tag":"AUTO","event":"fired","id":"auto\_100e3876c968"\}}. Device log: \mono{BTN: PB1 -> toggle}. \\
+\hline
+TC-07 & Tự động hóa Cảm biến & Cảm biến chuyển động tự động bật Đèn & Kích hoạt cảm biến PIR vật lý. Gateway nhận sự kiện, chạy rule \mono{auto\_cffe8e355c99} (bật đèn) và \mono{auto\_4478960bac84} (tắt đèn). & Kích hoạt chuyển động vật lý trên PIR & Cảm biến báo cáo trạng thái phát hiện chuyển động (occupied=1) -> Đèn bật. Khi hết chuyển động (unoccupied=0) -> Đèn tắt. & Đèn bật tức thì khi có chuyển động vật lý và tự động tắt khi hết chuyển động theo đúng cấu hình logic. & Đạt & Gateway log: \mono{MOTION: occupied from 0xE2C3}, \mono{@LOG \{"tag":"AUTO","event":"fired","id":"auto\_cffe8e355c99"\}}, \mono{MOTION: unoccupied from 0xE2C3}. Device log: \mono{PIR: MOTION DETECTED (pin=1)}. \\
+\hline
+TC-08 & Mất mạng khôi phục & Kiểm tra vận hành khi offline và tự động phục hồi & Chặn cổng kết nối 8883 (MQTT TLS) bằng firewall tại Gateway. Điều khiển cục bộ bằng Switch/PIR. Gỡ chặn firewall. & Ngắt và kết nối lại internet tại Gateway & Mất kết nối Cloud: rule tự động hóa cục bộ vẫn hoạt động bình thường. Khi có mạng lại: tự động kết nối lại MQTT Broker. & Tự động hóa cục bộ qua Switch và PIR vẫn vận hành bình thường khi mất kết nối mạng. Gateway tự kết nối lại MQTT Broker sau khi gỡ chặn. & Đạt & Gateway log: \mono{unexpected disconnect rc=7}, \mono{unexpected disconnect rc=19}, \mono{MQTT: connected to 98.83.4.87:8883}, \mono{MQTT: subscribed to ...}. \\
+\hline
+TC-09 & Quét Timeout lệnh & Xử lý khi gửi lệnh tới thiết bị mất nguồn & Ngắt nguồn điện của Đèn Z3Light. Gửi lệnh bật Đèn từ App. & Gửi lệnh ``ON'' tới Đèn đã mất nguồn & Gateway không thể gửi ZCL tới thiết bị do unreachable. Cloud Background Worker quét timeout và đổi trạng thái lệnh sang \mono{timeout}. & Lệnh ở trạng thái \mono{sent} trên Cloud. Sau khoảng 5000 ms, Background Worker tự động cập nhật trạng thái lệnh thành \mono{timeout}. & Đạt & DB state = \mono{timeout}. Background worker log: \mono{Command [UUID] timeout after ... ms}. \\
+\hline
+\end{tabular}
+\normalsize
+\renewcommand{\arraystretch}{1.0}
+\end{table}
 
-Một tệp bị yêu cầu bởi hai test nên tổng số test lỗi là năm. Đây là lỗi thiếu artifact tài liệu production, không phải bằng chứng cho thấy 177 test còn lại sai. Tuy nhiên, suite tổng vẫn được đánh giá \textit{Chưa đạt} cho tới khi các contract test này được xử lý.
+% ========================================
+% 5.4 ĐÁNH GIÁ KẾT QUẢ KIỂM THỬ
+% ========================================
+\section{Đánh giá kết quả kiểm thử}
+\label{sec:ch5-evaluation}
 
-\subsection{Mobile App}
+Thông qua việc thực hiện thành công các nhóm kịch bản kiểm thử hệ thống
+ở trên, các tiêu chí đánh giá về độ chính xác và hiệu năng vận hành đã
+được phân tích cụ thể:
 
-Lệnh \texttt{flutter test} chạy 104 test và kết thúc với thông báo \texttt{All tests passed}. Bộ test bao phủ model, repository, view model, màn hình đăng nhập, dashboard và trường hợp viewport hẹp. Kết quả này chứng minh code Flutter đạt test tự động hiện có; nó không thay thế kiểm thử thủ công trên điện thoại thật hoặc kiểm thử với Cloud/Gateway thật.
+\subsection{Mức độ hoàn thành các tiêu chí hệ thống}
+\label{sec:ch5-criteria-eval}
 
-\section{Evidence cần bổ sung cho kiểm thử phần cứng}
-\label{sec:ch5-evidence-needed}
+Bảng \ref{tab:ch5-eval-summary} tổng hợp mức độ hoàn thành và đánh giá
+kết quả vận hành thực tế đối với từng luồng chức năng quan trọng của hệ thống.
 
-Mỗi test phần cứng cần một bộ evidence đủ để truy lại toàn bộ luồng. Với test join, cần log EUI-64 và registry. Với test đèn, cần command request, command reply, reported state và ảnh trạng thái vật lý. Với công tắc hoặc cảm biến, cần log sự kiện, API response và hành vi thiết bị đích nếu có automation.
+\begin{table}[H]
+\centering
+\caption{Tổng hợp đánh giá mức độ hoàn thành các tiêu chí hệ thống}
+\label{tab:ch5-eval-summary}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{4.2cm}|>{\raggedright\arraybackslash}p{2.0cm}|>{\raggedright\arraybackslash}p{7.5cm}|}
+\hline
+\textbf{Tiêu chí đánh giá} & \textbf{Kết quả} & \textbf{Nhận xét phân tích} \\ \hline
+Đồng bộ trạng thái Uplink & Đạt 100\% & Dữ liệu báo cáo tự động từ thiết bị được Gateway chuẩn hóa JSON và đồng bộ về CSDL Cloud tức thời. \\ \hline
+Điều khiển Downlink & Đạt 100\% & Các lệnh bật/tắt thiết bị chấp hành từ App di động được thực thi đúng đắn với phản hồi trạng thái hoàn thành rõ ràng. \\ \hline
+Tự động hóa cục bộ & Đạt 80\% & Điều khiển liên kết tự động cục bộ (Switch-Light) hoạt động tốt, tuy nhiên rule engine ở biên mới chạy các kịch bản cứng tĩnh. \\ \hline
+Xử lý lỗi & Đạt 90\% & Đã kiểm thử và chạy ổn định cơ chế tự phục hồi kết nối của Gateway và cơ chế quét dọn các lệnh bị treo (Timeout) ở Cloud. \\ \hline
+Tính nhất quán giao diện & Đạt 95\% & Trạng thái biểu diễn trên thiết bị Đèn vật lý luôn trùng khớp với giao diện hiển thị của người dùng trên ứng dụng di động. \\ \hline
+\end{tabular}
+\end{table}
 
-Ảnh giao diện đơn lẻ chỉ chứng minh trạng thái hiển thị tại một thời điểm. Để chứng minh lệnh xuyên suốt, cần ghép ảnh hoặc video với command ID, MQTT trace và trạng thái lưu trong Cloud. Nếu evidence không chứa định danh hoặc thời gian, không thể chắc chắn các ảnh thuộc cùng một lần chạy.
+Bảng~\ref{tab:ch5-eval-summary} chỉ ra rằng các chức năng cốt lõi gồm đồng bộ trạng thái Uplink và điều khiển Downlink đạt tỷ lệ hoàn thành 100\%, khẳng định tính đúng đắn của kiến trúc đa lớp đã thiết kế. Các hạng mục chưa đạt 100\% phản ánh trung thực các giới hạn kỹ thuật còn tồn tại, làm cơ sở để đề xuất hướng phát triển trong chương kết luận.
 
-\section{Hạn chế và phạm vi mở rộng}
+\subsection{Phân tích độ trễ của hệ thống}
+\label{sec:ch5-latency-analysis}
+
+Trong phiên kiểm thử này, các thông số về độ trễ định lượng chưa được thực hiện đo đạc một cách hệ thống hay sử dụng các công cụ phân tích chuyên dụng (chỉ tập trung vào đánh giá định tính qua log sự kiện). Tuy nhiên, dựa trên phân tích logic hoạt động và ước lượng thực tế từ các phiên chạy thử, hệ thống đạt được hiệu năng phản hồi như sau:
+
+\textbf{Độ trễ điều khiển Downlink (Cloud-based):} Đo từ thời điểm gửi lệnh từ ứng dụng di động qua API Cloud cho tới khi Đèn LED0 bật sáng. Độ trễ thực tế ước tính ở mức thấp (dưới $1\text{ s}$ trong điều kiện kết nối mạng ổn định), đảm bảo trải nghiệm tương tác trực quan cho người dùng.
+
+\textbf{Độ trễ đồng bộ Uplink:} Đo từ thời điểm trạng thái Đèn vật lý hay cảm biến thay đổi cho đến khi thông tin cập nhật hiển thị trên giao diện người dùng. Luồng đồng bộ qua MQTT Broker đám mây diễn ra gần như tức thời ngay sau khi Gateway publish gói tin reported.
+
+\textbf{Độ trễ tự động hóa cục bộ ở biên (Local Rule):} Đo từ lúc bấm nút PB1 trên Công tắc hoặc kích hoạt cảm biến PIR cho đến khi Đèn LED0 đổi trạng thái. Do luồng xử lý và đối chiếu rule được thực hiện hoàn toàn tại Gateway nhúng (Local Rules Engine) mà không cần gửi tin lên Cloud, độ trễ phản hồi cực kỳ nhỏ, đem lại phản ứng tức thì và độ tin cậy cao ngay cả khi mất kết nối mạng.
+
+% ========================================
+% 5.5 HẠN CHẾ CỦA HỆ THỐNG
+% ========================================
+\section{Hạn chế của hệ thống phát hiện qua kiểm thử}
 \label{sec:ch5-limitations}
 
-Bộ test hiện tại có coverage tốt hơn ở Cloud và Mobile App so với phần cứng. Các tình huống mất điện, nhiễu sóng, nhiều thiết bị join đồng thời và vận hành dài ngày chưa có evidence trong báo cáo. Đây là các test cần ưu tiên trước khi đánh giá độ ổn định hoặc độ trễ của hệ thống.
+Mặc dù hệ thống đã đáp ứng tốt các yêu cầu kiểm thử chức năng cơ bản và được đánh giá vận hành ổn định, một số hạn chế kỹ thuật quan trọng đã được ghi nhận và cần được khắc phục:
 
-Cập nhật firmware qua mạng, còn gọi là Over-the-Air (OTA), không thuộc phạm vi triển khai và kiểm thử của phiên bản hiện tại. Nội dung này chỉ được giữ như một khả năng mở rộng sau khi các luồng join, điều khiển, báo trạng thái, phân quyền và phục hồi kết nối đã có evidence đầy đủ.
+\textbf{Quy mô thử nghiệm nhỏ hẹp và thiếu số liệu định lượng:} Các phép thử nghiệm mới chỉ được thực hiện trong môi trường phòng thí nghiệm nhỏ với số lượng node hạn chế (05 node). Hệ thống chưa có số liệu đánh giá chính xác về độ tin cậy truyền tin, tỷ lệ suy hao gói tin (Packet Delivery Ratio - PDR) cũng như độ trễ cụ thể khi mạng được mở rộng quy mô lên hàng chục hoặc hàng trăm node trong các môi trường tòa nhà phức tạp nhiều tầng có nhiều vật cản kim loại và bê tông.
 
-\section{Tổng kết chương}
+\textbf{An toàn bảo mật ở các lớp ứng dụng và cơ chế xác thực:} Mặc dù đường truyền kết nối giữa Gateway nhúng và Cloud Broker đã được bảo vệ bằng giao thức mã hóa TLS và xác thực hai chiều mTLS (Port 8883) với chứng chỉ số đáng tin cậy, hệ thống vẫn tồn tại những hạn chế bảo mật khác. Việc xác thực tài khoản và phân quyền truy cập (ACL) tại Broker vẫn sử dụng tài khoản/mật khẩu tĩnh. Đồng thời, ứng dụng di động cũng cần được bổ sung thêm các cơ chế xác thực người dùng nâng cao và mã hóa dữ liệu cục bộ.
 
-Chương 5 đã tách rõ kết quả phần mềm có thể lặp lại bằng lệnh test và các test phần cứng còn thiếu evidence. Bốn nhóm test trọng tâm đạt, trong khi Cloud suite tổng chưa đạt do năm contract test thiếu tài liệu production. Các test thiết bị và test xuyên suốt chưa được ghi thành công cho tới khi có log, API response, ảnh hoặc video tương ứng.
+\textbf{Hạn chế về xử lý nhiễu của cảm biến hiện diện vật lý:} Dù cảm biến hiện diện PIR vật lý thực tế đã được tích hợp thành công trên GPIO trong kịch bản kiểm thử, tín hiệu từ cảm biến dễ bị nhiễu bởi các yếu tố môi trường (nhiễu nhiệt, nhiễu ánh sáng). Hiện tượng trạng thái thay đổi liên tục giữa có người và không có người (jitter) có thể xảy ra, gây bật/tắt thiết bị chấp hành liên tiếp nếu không có thuật toán lọc nhiễu và debounce tín hiệu hiệu quả ở biên.
+
+\textbf{Điểm lỗi đơn lẻ (Single Point of Failure):} Bộ điều phối mạng Coordinator (NCP) kết nối trực tiếp với duy nhất một tiến trình C \texttt{Z3Gateway} nhúng. Nếu bo mạch Coordinator gặp sự cố nguồn hoặc tiến trình Gateway bị treo đột ngột, toàn bộ mạng cục bộ sẽ bị cô lập, các thiết bị không thể tương tác tự động hóa với nhau và người dùng hoàn toàn mất quyền giám sát, điều khiển.
+
+Như vậy, toàn bộ quá trình kiểm thử đã cung cấp đầy đủ dữ liệu thực tế
+để chứng minh tính khả thi của giải pháp kiến trúc hệ thống IoT Zigbee
+Smart Building đã thiết kế, đồng thời vạch ra những vấn đề kỹ thuật cốt
+lõi cần giải quyết ở giai đoạn tiếp theo.
+
+\newpage

@@ -49,3 +49,6 @@ zigbee-ble-orchestration-platform/
 
 # === Old/reference report ===
 final_rp_da2/
+
+# === Agent handoffs + evidence (personal, không commit) ===
+handoffs/

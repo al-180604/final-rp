@@ -4,186 +4,522 @@
 \chapter{TRIỂN KHAI HỆ THỐNG}
 \label{ch:trienkhai}
 
+% ----- TÓM TẮT CHƯƠNG -----
 \vspace{0.5cm}
-\noindent\textit{Chương này trình bày cách các khối thiết kế ở Chương 3 được hiện thực trong mã nguồn. Mỗi phần trả lời năm câu hỏi: thành phần nhận dữ liệu gì, xử lý ở đâu, tạo ra dữ liệu gì, liên hệ với thành phần kế tiếp như thế nào và có thể kiểm tra bằng evidence nào. Cách trình bày này giúp người đọc không cần biết sâu về Zigbee hoặc lập trình nhúng vẫn theo dõi được luồng vận hành của hệ thống.}
+\noindent\textit{Chương này trình bày chi tiết quá trình hiện thực hóa các thiết kế hệ thống từ Chương 3 thành một mô hình prototype cụ thể trong phạm vi đề tài đồ án tốt nghiệp. Quá trình triển khai được trình bày theo định hướng kết hợp giữa học tập nghiên cứu giao thức mạng Zigbee và định hình giải pháp sản phẩm IoT (Hybrid "Learning to Product"). Nội dung chương đi sâu mô tả cấu trúc mã nguồn, cấu hình phần cứng, các module phần mềm của Gateway Edge nhúng, Cloud Backend và ứng dụng di động Mobile App, đồng thời vạch rõ các ranh giới kỹ thuật hiện tại.}
 \vspace{0.5cm}
 
-\section{Cách đọc phần triển khai}
-\label{sec:ch4-reading-guide}
+% ========================================
+% 4.1 ĐỊNH HƯỚNG TRIỂN KHAI
+% ========================================
+\section{Định hướng triển khai: từ học Zigbee đến prototype hướng product}
+\label{sec:ch4-orientation}
 
-Hệ thống được triển khai theo bốn lớp. Lớp thiết bị biến tác động vật lý thành trạng thái hoặc sự kiện Zigbee. Lớp Gateway chuyển đổi giữa Zigbee và Message Queuing Telemetry Transport (MQTT). Lớp Cloud lưu dữ liệu, kiểm soát quyền và cung cấp Application Programming Interface (API). Lớp Mobile App cung cấp giao diện cho người dùng.
+Quá trình triển khai hệ thống trong đề tài đồ án tốt nghiệp này không chỉ dừng lại ở việc lập trình các tính năng riêng lẻ hay cấu hình một mạng Zigbee cục bộ khép kín. Trọng tâm của chương này là mô tả cách hiện thực hóa bản thiết kế kiến trúc đa lớp đã đặt ra ở Chương 3, kết nối các thành phần từ tầng thiết bị vật lý, Gateway biên dịch giao thức, Cloud orchestration xử lý logic tập trung và ứng dụng di động Flutter. Việc tích hợp các lớp này nhằm tạo nên một giải pháp có khả năng vận hành đồng bộ và giải quyết bài toán quản lý thiết bị thông minh trong các tòa nhà (Smart Building).
 
-Trong mỗi lớp, đầu vào và đầu ra phải giữ đúng hợp đồng đã thiết kế. Ví dụ, cảm biến chuyển động có thể phát trạng thái \texttt{occupancy}, nhưng loại thiết bị vẫn là \texttt{motion}. Tương tự, Cloud trả trạng thái lệnh \texttt{accepted} khi đã tiếp nhận yêu cầu; chỉ phản hồi \texttt{executed} từ Gateway mới chứng minh thiết bị đã thực thi.
+Định hướng triển khai của đồ án tuân theo mô hình kết hợp Hybrid "Learning to Product". Mô hình này chia quá trình xây dựng hệ thống thành hai khía cạnh song hành:
+\begin{itemize}
+    \item \textbf{Khía cạnh học tập (Learning):} Giúp nghiên cứu sâu về các cơ chế cơ bản của giao thức Zigbee bao gồm cách Coordinator tạo lập mạng, cơ chế tham gia mạng (join/commissioning) của các Router/End Device, các tập lệnh chuẩn của thư viện Zigbee Cluster Library (ZCL), và việc truyền nhận trạng thái (attribute report) hay sự kiện (event) ở mức mạng cục bộ.
+    \item \textbf{Khía cạnh sản phẩm (Product):} Định hướng thiết kế và đóng gói hệ thống tiệm cận với cấu trúc của một sản phẩm thương mại. Điều này được thể hiện qua việc tối ưu hóa hiệu năng Gateway (viết bằng ngôn ngữ native C giúp tiết kiệm tài nguyên hệ thống nhúng), tổ chức Cloud Backend theo mô hình REST API chuẩn hóa kèm theo hàng đợi xử lý lệnh không đồng bộ qua MQTT broker, quản lý trạng thái và dữ liệu sự kiện qua hệ quản trị cơ sở dữ liệu PostgreSQL, cung cấp giao diện quản trị trực quan trên Mobile App và tự động hóa quy trình triển khai bằng công cụ Docker Compose trên nền tảng điện toán đám mây.
+\end{itemize}
 
-\section{Môi trường triển khai và quản lý mã nguồn}
+Thông qua việc phân định rõ hai trục này, hệ thống vừa đóng vai trò như một môi trường thực nghiệm nghiên cứu mạng không dây công suất thấp, vừa phác thảo nên một khung giải pháp có khả năng mở rộng (scale-up) và sẵn sàng nâng cấp lên các tính năng thương mại hóa.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cCloud, minimum width=3.8cm, minimum height=1.5cm] (local) at (0,0) {\textbf{Mạng Zigbee Cục bộ}\\\textit{(Learning Layer)}\\Coordinator (NCP), Routers,\\Attributes \& ZCL Commands};
+        \node[fblk, cGw, minimum width=3.6cm, minimum height=1.5cm] (edge) at (5.6,0) {\textbf{Gateway Edge (Native C)}\\\textit{(Translation Layer)}\\MQTT-to-Zigbee Bridge,\\Command Queue \& Registry};
+        \node[fblk, cMob, minimum width=3.6cm, minimum height=1.5cm] (cloud) at (11.2,0) {\textbf{Cloud \& Mobile UX}\\\textit{(Product Layer)}\\FastAPI, PostgreSQL DB,\\REST APIs, Flutter UI};
+        \draw[farr] (local) -- node[flbl, above] {EZSP / ASH} (edge);
+        \draw[farr] (edge) -- node[flbl, above] {MQTT Telemetry} (cloud);
+        \draw[farr] (cloud.south) -- ++(0,-0.7) -| (edge.south);
+        \node[flbl, below] at (8.4,-1.45) {REST / MQTT Commands};
+    \end{tikzpicture}
+    \caption{Định hướng triển khai tích hợp giữa nghiên cứu mạng Zigbee và giải pháp sản phẩm IoT.}
+    \label{fig:ch4-learning-to-product}
+\end{figure}
+
+Hình \ref{fig:ch4-learning-to-product} minh họa rõ nét ranh giới và cách liên kết giữa các lớp. Mạng Zigbee cục bộ chịu trách nhiệm thu thập trạng thái vật lý và thực thi lệnh phần cứng. Gateway đóng vai trò trung gian biên dịch giao thức từ các gói tin nhị phân Zigbee sang dữ liệu JSON có cấu trúc qua MQTT broker. Lớp trên cùng bao gồm Cloud Backend và Mobile App cung cấp các giao diện lập trình ứng dụng (API) và trải nghiệm sử dụng (UX) cho người dùng cuối.
+
+% ========================================
+% 4.2 MÔI TRƯỜNG VÀ CẤU TRÚC MÃ NGUỒN
+% ========================================
+\section{Môi trường triển khai và cấu trúc mã nguồn}
 \label{sec:ch4-implementation-env}
 
-Bảng \ref{tab:ch4-source-map} trình bày các vùng mã nguồn chính. Các đường dẫn được lấy từ repository hiện tại của hệ thống.
+Hệ thống được tổ chức thành các thư mục mã nguồn riêng biệt, phân tách rõ ràng trách nhiệm của từng thành phần trong giải pháp đa lớp. Môi trường triển khai thực tế sử dụng các công nghệ hiện đại, phù hợp với năng lực xử lý của từng thiết bị. Bảng \ref{tab:ch4-source-map} tóm tắt các thành phần chính trong mã nguồn cùng công nghệ và vai trò tương ứng của chúng.
 
 \begin{table}[H]
 \centering
-\caption{Bản đồ thành phần và mã nguồn triển khai}
+\caption{Môi trường công nghệ và bản đồ mã nguồn triển khai}
 \label{tab:ch4-source-map}
-\small
-\begin{tabular}{|>{\raggedright\arraybackslash}p{3.1cm}|>{\raggedright\arraybackslash}p{4.4cm}|>{\raggedright\arraybackslash}p{6.6cm}|}
+{\footnotesize
+\begin{tabular}{|p{2.8cm}|p{4.2cm}|p{7.5cm}|}
 \hline
-\textbf{Thành phần} & \textbf{Công nghệ chính} & \textbf{Vị trí mã nguồn} \\ \hline
-Thiết bị Zigbee & Gecko Software Development Kit (GSDK), EmberZNet, ngôn ngữ C & \path|end_devices/ncp-uart-hw-fresh/|, \path|end_devices/Z3Light/|, \path|end_devices/Z3Switch/|, \path|end_devices/Z3_Occupancy_Sensor/| \\ \hline
-Gateway & Z3GatewayHost, C, \texttt{libmosquitto}, EmberZNet Serial Protocol (EZSP) & \path|gateway/Z3GatewayHost/app/| \\ \hline
-Cloud Backend & Python, FastAPI, SQLAlchemy, Paho MQTT & \path|cloud/app/|, \path|cloud/app/routers/| \\ \hline
-Cơ sở dữ liệu & PostgreSQL trong môi trường demo, SQLite cho một số test & \path|cloud/app/models.py|, \path|cloud/app/database.py| \\ \hline
-Mobile App & Flutter, Dart, Provider, vùng lưu trữ token bảo mật & \path|mobile_app/lib/| \\ \hline
-Triển khai & Docker Compose và cấu hình môi trường & \path|deploy/| \\ \hline
+\textbf{Thành phần} & \textbf{Công nghệ / Vai trò} & \textbf{Evidence trong mã nguồn} \\ \hline
+Firmware Zigbee & Silicon Labs Gecko SDK v4.5.0, EmberZNet, nạp qua Simplicity Commander & \path|artifact/ncp-uart-hw/|, \path|artifact/Z3Light/|, \path|artifact/Z3Switch/|, \path|end_devices/Z3_Occupancy_Sensor/| \\ \hline
+Gateway Edge & Native C, libmosquitto, EZSP/ASH qua kết nối serial UART & \path|gateway/Z3GatewayHost/app/app_mqtt.c|, \path|cmd_handler.c|, \path|device_dispatch.c|, \path|light_ctrl.c|, \path|device_registry.c| \\ \hline
+Cloud Backend & Python, FastAPI 0.115.6, SQLAlchemy async, Paho MQTT & \path|cloud/app/main.py|, \path|models.py|, \path|mqtt_client.py|, \path|command_timeout.py|, \path|routers/| \\ \hline
+Database & PostgreSQL 16, quản lý cấu trúc dạng quan hệ và các trường JSON mở rộng & \path|deploy/docker-compose.prod.yml|, \path|cloud/app/models.py| \\ \hline
+Mobile App & Flutter SDK, Dart, quản lý trạng thái bằng thư viện Provider & \path|mobile_app/lib/data/services/api_client.dart|, \path|mobile_app/lib/data/repositories/|, \path|mobile_app/lib/ui/| \\ \hline
+Deployment & Docker Compose, shell script chạy trên máy chủ AWS EC2 Ubuntu 22.04 LTS & \path|deploy/docker-compose.prod.yml|, \path|deploy/deploy.ps1|, \path|deploy/ec2-setup.ps1| \\ \hline
+\end{tabular}
+}
+\end{table}
+
+Việc tổ chức mã nguồn như trên giúp nhóm phát triển có thể độc lập xây dựng và kiểm thử từng module. Ví dụ, Cloud Backend có thể được kiểm thử bằng các kịch bản mô phỏng (mocking) thông qua \texttt{pytest} mà không cần có thiết bị vật lý hay Gateway chạy thực tế. Tương tự, ứng dụng di động Flutter có thể chạy ở chế độ giả lập dữ liệu bằng cách thay đổi cấu hình truyền dẫn sang API giả lập để phục vụ kiểm thử giao diện một cách nhanh chóng.
+
+% ========================================
+% 4.3 TRIỂN KHAI MẠNG ZIGBEE VÀ FIRMWARE
+% ========================================
+\section{Triển khai mạng Zigbee và firmware thiết bị}
+\label{sec:ch4-zigbee-layer}
+
+Tầng thiết bị Zigbee là lớp trực tiếp tương tác với môi trường vật lý. Đây là thành phần quyết định tính ổn định của toàn hệ thống vì các thiết bị phần cứng thường hoạt động liên tục trong thời gian dài và chịu ảnh hưởng lớn từ nhiễu sóng vô tuyến. Trong đồ án này, các thiết bị được thiết kế và triển khai dựa trên các kit phát triển phần cứng của hãng Silicon Labs, sử dụng công cụ cấu hình đồ họa và thư viện EmberZNet của Gecko SDK.
+
+\subsection{Triển khai Coordinator / NCP Board}
+\label{sec:ch4-ncp-firmware}
+
+Coordinator đóng vai trò là gốc của mạng Zigbee, chịu trách nhiệm khởi tạo mạng vô tuyến, quản lý các khóa bảo mật và quyết định cho phép thiết bị mới tham gia mạng. Để tối ưu hóa hiệu năng, Coordinator được thiết triển khai theo kiến trúc Network Co-Processor (NCP). Firmware NCP chạy trực tiếp trên chip SoC EFR32MG12, đảm nhận việc xử lý các tầng giao thức Zigbee mức thấp (Physical, MAC, Network, Transport). 
+
+NCP giao tiếp với Gateway Host thông qua giao tiếp UART vật lý bằng giao thức mã hóa dòng lệnh EZSP/ASH (EmberZNet Serial Protocol / Asynchronous Serial Host). Cách phân tách này giúp giải phóng tài nguyên tính toán cho Gateway Host (chạy trên Linux) và tăng độ tin cậy khi truyền nhận dữ liệu vô tuyến. Bản ghi build và phân phối firmware NCP được chỉ định tại \path|artifact/ncp-uart-hw/manifest.json|.
+
+\subsection{Triển khai Router đèn (Z3Light Device)}
+\label{sec:ch4-light-firmware}
+
+Thiết bị đèn Z3Light được cấu hình chạy ở chế độ Zigbee Router. Thiết bị này hoạt động bằng nguồn điện lưới xoay chiều trực tiếp, tham gia định tuyến gói tin cho các thiết bị khác trong mạng mesh, đồng thời expose các cluster chức năng bao gồm:
+\begin{itemize}
+    \item \texttt{On/Off Cluster} (Cluster ID \texttt{0x0006}): Nhận lệnh bật/tắt và báo cáo trạng thái nguồn của đèn.
+    \item \texttt{Level Control Cluster} (Cluster ID \texttt{0x0008}): Nhận lệnh thay đổi độ sáng và báo cáo chỉ số phần trăm độ sáng hiện tại (Level).
+\end{itemize}
+Khi trạng thái phần cứng của đèn thay đổi (ví dụ người dùng tắt bằng nút bấm phụ hoặc qua lệnh không dây), firmware đèn sẽ tự động gửi attribute report chứa giá trị \texttt{On/Off} hoặc \texttt{CurrentLevel} về NCP Coordinator. Artifact binary và manifest cấu hình cho Z3Light được quản lý tại \path|artifact/Z3Light/manifest.json|.
+
+\subsection{Triển khai Router công tắc (Z3Switch Device)}
+\label{sec:ch4-switch-firmware}
+
+Thiết bị công tắc Z3Switch cũng được triển khai ở vai trò Zigbee Router nhằm tăng mật độ các nút định tuyến trong mạng mesh. Khác với thiết bị đèn, Z3Switch hoạt động chủ yếu như một thiết bị gửi sự kiện đầu vào. Khi người dùng nhấn nút nhấn trên kit phát triển phần cứng, Z3Switch sẽ phát lệnh ZCL gửi về Coordinator. Lệnh này được dịch thành sự kiện toggle trên Gateway. Ở các phiên bản smoke test cục bộ, Z3Switch có thể được cấu hình liên kết trực tiếp (direct binding) với Z3Light ở lớp Zigbee nhằm giảm độ trễ điều khiển vật lý. Tuy nhiên, để tích hợp vào hệ thống giám sát và quản lý tự động, sự kiện từ công tắc vẫn được gửi lên MQTT Broker để Cloud Backend xử lý. Artifact cấu hình cho Z3Switch được lưu tại \path|artifact/Z3Switch/manifest.json|.
+
+\subsection{Triển khai cảm biến hiện diện (Motion/Occupancy Sensor)}
+\label{sec:ch4-occupancy-firmware}
+
+Cảm biến hiện diện được mô hình hóa trong hệ thống bằng loại thiết bị \texttt{motion}. Project nguồn của thiết bị này sử dụng tệp cấu hình Zigbee Cluster Library \path|end_devices/Z3_Occupancy_Sensor/config/zcl/zcl_config.zap|, hỗ trợ \texttt{Occupancy Sensing Cluster} (Cluster ID \texttt{0x0406}). Cảm biến báo cáo giá trị \texttt{occupied} (có người) hoặc \texttt{unoccupied} (không có người) dựa trên cảm biến hồng ngoại thụ động PIR. 
+
+Cần lưu ý rằng trong cấu trúc thư mục hiện tại của dự án, chưa có tệp artifact binary hoàn chỉnh cho cảm biến chuyển động trong thư mục \path|artifact/|. Do đó, phần này được ghi nhận ở mức triển khai cấu hình mã nguồn và khai báo logic giao tiếp, còn việc đánh giá hiệu năng chạy thực tế của cảm biến sẽ được trình bày trong Chương 5.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \tikzset{ndc/.style={draw, circle, align=center, minimum size=1.95cm, line width=0.5pt, font=\scriptsize, inner sep=1pt}}
+        \node[ndc, cZig] (ncp) at (0,0) {NCP\\Coordinator};
+        \node[ndc, cCloud] (light) at (4.3,1.9) {Z3Light\\Router};
+        \node[ndc, cCloud] (switch) at (4.3,-1.9) {Z3Switch\\Router};
+        \node[ndc, cMob] (sensor) at (8.6,0) {Motion\\Sensor\\(End Device)};
+        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, above, sloped] {EZSP / UART} (light);
+        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, below, sloped] {EZSP / UART} (switch);
+        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, above, sloped] {EZSP / UART} (sensor);
+        \draw[<->, line width=0.6pt, dashed] (light) -- node[flbl, right] {Mesh Link} (switch);
+        \draw[<->, line width=0.6pt, dashed] (light) -- node[flbl, above, sloped] {Mesh Link} (sensor);
+    \end{tikzpicture}
+    \caption{Sơ đồ cấu trúc topo mạng Zigbee mesh được xây dựng trong đồ án.}
+    \label{fig:ch4-zigbee-topology}
+\end{figure}
+
+Sơ đồ topo mạng Zigbee mesh ở Hình \ref{fig:ch4-zigbee-topology} thể hiện sự kết nối giữa các node thiết bị vật lý. Các đường nét đứt đại diện cho liên kết định tuyến tự động giữa các Router với nhau và với End Device, tạo nên khả năng tự phục hồi mạng khi một node Router gặp sự cố mất điện đột ngột.
+
+\begin{table}[H]
+\centering
+\caption{Thông tin minh chứng các tệp tin cấu hình và firmware thiết bị}
+\label{tab:ch4-firmware-evidence}
+\footnotesize
+\begin{tabular}{|p{2.8cm}|p{2.8cm}|p{3.2cm}|p{4.7cm}|}
+\hline
+\textbf{Thiết bị} & \textbf{Vai trò mạng} & \textbf{Tệp manifest/cấu hình} & \textbf{Nội dung kỹ thuật học tập \& kiểm chứng} \\ \hline
+NCP Coordinator & Coordinator & \path|artifact/ncp-uart-hw/manifest.json| & Cấu hình kênh vô tuyến, PAN ID mạng và EZSP UART driver. \\ \hline
+Z3Light & Router & \path|artifact/Z3Light/manifest.json| & Cluster \texttt{On/Off} và \texttt{Level Control}, xử lý lệnh thay đổi đèn. \\ \hline
+Z3Switch & Router & \path|artifact/Z3Switch/manifest.json| & Bắt sự kiện button nhấn vật lý và phát bản tin ZCL toggle. \\ \hline
+Motion Sensor & End Device & \path|.../zcl_config.zap| & Đọc cảm biến PIR, truyền bản tin thay đổi trạng thái hiện diện. \\ \hline
 \end{tabular}
 \end{table}
 
-Nhóm sử dụng Jira để chia và theo dõi công việc. Git là hệ thống quản lý phiên bản phân tán dùng để ghi lại lịch sử thay đổi mã nguồn. GitHub là dịch vụ lưu repository từ xa, hỗ trợ chia sẻ branch, review và hợp nhất thay đổi. Ba công cụ này không tham gia luồng chạy của hệ thống, nhưng giúp hai thành viên kiểm soát phạm vi công việc và truy vết thay đổi.
+Bảng \ref{tab:ch4-firmware-evidence} tổng kết chi tiết vai trò mạng cũng như tệp cấu hình làm bằng chứng triển khai thực tế của các thiết bị.
 
-\section{Triển khai mạng Zigbee và thiết bị}
-\label{sec:ch4-zigbee-devices}
-
-Hình \ref{fig:ch4-zigbee-topology} tập trung vào các node trong mạng cục bộ. Sơ đồ được tách khỏi kiến trúc Cloud để người đọc quan sát rõ vai trò của từng thiết bị.
-
-\begin{figure}[H]
-\centering
-\includegraphics[width=0.78\textwidth]{Images/mermaid/ch4_zigbee_topology.png}
-\caption{Các node Zigbee được triển khai trong mô hình thử nghiệm}
-\label{fig:ch4-zigbee-topology}
-\end{figure}
-
-EFR32 Network Co-Processor (NCP) giữ vai trò Coordinator và xử lý phần radio. Ứng dụng Host trên Gateway gửi yêu cầu tới NCP qua giao tiếp nối tiếp. Đèn và công tắc hoạt động như Router; cảm biến chuyển động hoạt động như End Device để phù hợp với bài toán thiết bị cảm biến công suất thấp.
-
-\subsection{Coordinator và NCP}
-
-Firmware NCP khởi tạo Zigbee stack, cung cấp giao diện EZSP và cho phép Host mở hoặc đóng mạng để thiết bị tham gia. Đầu vào của NCP là yêu cầu từ Host và khung Zigbee nhận qua radio. Đầu ra là callback hoặc phản hồi EZSP cho Host. Evidence phù hợp gồm log tạo mạng, địa chỉ mạng của Coordinator và log permit join.
-
-\subsection{Thiết bị đèn}
-
-Thiết bị đèn triển khai On/Off Server của Zigbee Cluster Library (ZCL), tức thư viện chuẩn hóa cluster, thuộc tính và lệnh cho thiết bị Zigbee. Khi nhận lệnh bật hoặc tắt, firmware cập nhật đầu ra điều khiển đèn và báo cáo lại thuộc tính. Đầu vào là lệnh ZCL; đầu ra là trạng thái \texttt{power}, mức sáng nếu có và trạng thái có thể kết nối.
-
-\subsection{Thiết bị công tắc}
-
-Công tắc triển khai vai trò On/Off Client. Thao tác nút nhấn được chuyển thành sự kiện để Gateway và luật tự động hóa xử lý. Công tắc không được coi là đèn và không nhận lệnh điều khiển công suất từ Cloud. Evidence phù hợp gồm log nút nhấn, bản tin sự kiện MQTT và hành vi của thiết bị đích khi có luật.
-
-\subsection{Cảm biến chuyển động}
-
-Cảm biến triển khai Occupancy Sensing Server. Firmware đọc trạng thái cảm biến, cập nhật thuộc tính hiện diện và gửi báo cáo khi giá trị thay đổi. Đầu ra của lớp thiết bị là \texttt{occupancy}; Gateway đóng gói thành sự kiện \texttt{occupancy\_changed} và trạng thái của thiết bị loại \texttt{motion}.
-
-\section{Triển khai Gateway}
+% ========================================
+% 4.4 TRIỂN KHAI GATEWAY EDGE
+% ========================================
+\section{Triển khai Gateway Edge}
 \label{sec:ch4-gateway}
 
-Gateway là điểm nối giữa hai môi trường có mô hình xử lý khác nhau. Zigbee hoạt động theo callback của stack và địa chỉ thiết bị trong mạng cục bộ. MQTT hoạt động theo topic và payload JavaScript Object Notation (JSON), tức định dạng dữ liệu dạng cặp khóa--giá trị. Hình \ref{fig:ch4-gateway-flow} mô tả các bước xử lý chính trong Gateway.
+Gateway Edge đóng vai trò là "biên dịch viên" giao thức tại biên mạng. Nó chuyển đổi các bản tin JSON điều khiển có cấu trúc từ Cloud Backend thành các bản tin nhị phân ZCL thô gửi tới NCP Coordinator qua UART và ngược lại. Gateway được viết bằng ngôn ngữ native C chạy trên nền tảng Linux nhúng, giúp giảm thiểu độ trễ, tiết kiệm bộ nhớ RAM và tăng hiệu năng hoạt động. Điều này thay thế cho mô hình bridge cũ sử dụng tiến trình trung gian viết bằng Python.
+
+\subsection{MQTT client và command queue}
+\label{sec:ch4-gateway-arch}
+
+Module \texttt{app\_mqtt.c} là cổng giao tiếp chính của Gateway với thế giới bên ngoài. Module này khởi tạo một tiến trình kết nối MQTT client sử dụng thư viện \texttt{libmosquitto}. Gateway đăng ký subscribe các topic nhận lệnh điều khiển dạng \path|commands/+/request|. Khi nhận được một bản tin MQTT command từ Broker, tiến trình callback của MQTT sẽ không xử lý trực tiếp bản tin đó nhằm tránh làm nghẽn luồng nhận tin của mạng. Thay vào đó, bản tin được chuyển sang cấu trúc JSON, parse envelope và đưa vào một hàng đợi không đồng bộ (Command Queue) dạng Ring Buffer nội bộ. Cách tiếp cận này giúp tách biệt hoàn toàn luồng truyền thông mạng và luồng thực thi lệnh của thiết bị Zigbee.
+
+\subsection{Command handler và điều khiển thiết bị}
+\label{sec:ch4-correlation-impl}
+
+Trong vòng lặp chính của Gateway (main tick), chương trình sẽ liên tục thăm dò hàng đợi. Khi phát hiện có lệnh mới, module \texttt{cmd\_handler.c} sẽ lấy lệnh ra khỏi hàng đợi để phân tích cú pháp. Chương trình sẽ bóc tách phong bì tin MQTT (envelope), trích xuất \texttt{command\_id}, \texttt{device\_id}, tên cluster và thao tác yêu cầu.
+
+Sau đó, \texttt{device\_dispatch.c} thực hiện ánh xạ từ \texttt{device\_id} logic thành địa chỉ EUI64 vô tuyến và mã Endpoint mạng của thiết bị Zigbee tương ứng. Cuối cùng, module \texttt{light\_ctrl.c} sẽ gọi hàm của SDK để đóng gói các bản tin ZCL tương ứng với cluster On/Off gửi xuống NCP qua giao tiếp EZSP.
+
+Một thiết kế quan trọng trong hệ thống điều khiển là cơ chế theo dõi lệnh (correlation). Khóa chính để xác định một lệnh duy nhất là \texttt{command\_id} nằm trên topic \path|commands/{command_id}/request|. Trường \texttt{correlation\_id} được đính kèm trong payload JSON đóng vai trò là chuỗi theo vết cho cùng một luồng nghiệp vụ trên hệ thống. Gateway phải đảm bảo giữ nguyên cặp mã này khi trả lời kết quả về topic \path|commands/{command_id}/reply| để Cloud có thể phân biệt và xác nhận lệnh.
+
+\subsection{Discovery, registry và rule cục bộ}
+\label{sec:ch4-local-rules}
+
+Gateway quản lý thông tin các thiết bị đã kết nối thông qua tệp tin \texttt{device\_registry.c}. Khi một thiết bị mới hoàn thành quá trình commissioning và join mạng thành công, module \texttt{device\_discovery.c} sẽ thu thập thông tin về EUI64, node ID, mã endpoint và danh sách cluster được hỗ trợ để lưu vào bộ nhớ cục bộ của Gateway, đồng thời publish bản tin đăng ký (registry) lên MQTT Broker để Cloud Backend cập nhật cơ sở dữ liệu.
+
+Về mặt tự động hóa tại biên, mã nguồn Gateway có tích hợp module \texttt{rule\_engine.c} để xử lý các liên kết trực tiếp cục bộ. Tuy nhiên, tính năng này hiện tại được ghi nhận ở mức hỗ trợ các luật cứng cấu hình tĩnh (ví dụ khi có sự kiện từ công tắc Z3Switch, Gateway sẽ tự động gửi lệnh điều khiển bật/tắt tới đèn Z3Light mà không cần đi qua Cloud). Hệ thống chưa hỗ trợ cơ chế nhận, lưu trữ và đồng bộ hóa các luật động (dynamic rules) từ Cloud xuống Gateway.
 
 \begin{figure}[H]
-\centering
-\includegraphics[width=0.82\textwidth]{Images/mermaid/ch4_gateway_processing.png}
-\caption{Luồng xử lý dữ liệu trong Gateway}
-\label{fig:ch4-gateway-flow}
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cInfra, minimum width=2.5cm] (broker)  at (0,0)   {Mosquitto\\Broker};
+        \node[fblk, cGw,    minimum width=2.5cm] (mqtt)    at (3.3,0) {app\_mqtt.c\\(MQTT Client)};
+        \node[fblk, cQueue, minimum width=2.5cm] (queue)   at (6.6,0) {Command Queue\\(Ring Buffer)};
+        \node[fblk, cGw,    minimum width=2.5cm] (handler) at (9.9,0) {cmd\_handler.c\\(Parser)};
+        \node[fblk, cGw,    minimum width=2.5cm] (dispatch) at (9.9,-2.0) {device\_dispatch.c\\(Dispatcher)};
+        \node[fblk, cGw, minimum width=2.5cm] (ctrl) at (6.6,-4.0) {light\_ctrl.c\\(Actuator Ctrl)};
+        \node[fblk, cGw, minimum width=2.5cm] (reg)  at (9.9,-4.0) {device\_registry.c\\(Local Registry)};
+        \node[fblk, cGw, minimum width=2.5cm] (rule) at (13.2,-4.0) {rule\_engine.c\\(Local Rules)};
+        \draw[fbi]  (broker) -- node[flbl, above] {MQTT} (mqtt);
+        \draw[farr] (mqtt) -- node[flbl, above] {Enqueue} (queue);
+        \draw[farr] (queue) -- node[flbl, above] {Dequeue} (handler);
+        \draw[farr] (handler) -- node[flbl, right] {Dispatch} (dispatch);
+        \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (ctrl.north);
+        \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (reg.north);
+        \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (rule.north);
+    \end{tikzpicture}
+    \caption{Kiến trúc luồng xử lý không đồng bộ bên trong phần mềm Gateway Edge.}
+    \label{fig:ch4-gateway-architecture}
 \end{figure}
 
-\subsection{Kết nối MQTT và hàng đợi lệnh}
+Kiến trúc phân rã các module xử lý của Gateway ở Hình \ref{fig:ch4-gateway-architecture} thể hiện tính độc lập và khả năng xử lý song song của Gateway. Khi MQTT nhận lệnh mới, luồng chính không bị chặn mà lệnh được chuyển vào Ring Buffer chờ luồng logic tiêu thụ theo thứ tự thời gian.
 
-Module \path|app_mqtt.c| đọc cấu hình broker, thông tin tenant, site và Gateway từ biến môi trường. Trong chế độ production, module yêu cầu thông tin xác thực và đường dẫn chứng thư nếu bật Transport Layer Security (TLS), tức cơ chế bảo vệ kênh truyền. Sau khi kết nối, Gateway đăng ký topic lệnh và phát định kỳ trạng thái hoạt động.
+\begin{table}[H]
+\centering
+\caption{Bản đồ phân rã chức năng các file mã nguồn Gateway C}
+\label{tab:ch4-gateway-modules}
+\footnotesize
+\begin{tabular}{|p{3.2cm}|p{3.5cm}|p{7.8cm}|}
+\hline
+\textbf{Module} & \textbf{Tệp tin mã nguồn} & \textbf{Vai trò và nhiệm vụ cụ thể} \\ \hline
+MQTT Client & \path|app_mqtt.c| & Khởi tạo thư viện \texttt{libmosquitto}, duy trì kết nối MQTT, nhận lệnh điều khiển và đưa vào hàng đợi. \\ \hline
+Command Handler & \path|cmd_handler.c| & Giải mã phong bì JSON MQTT, phân tích cú pháp các lệnh điều khiển thuộc envelope \texttt{sb.v1}. \\ \hline
+Device Dispatcher & \path|device_dispatch.c| & Phân phối các lệnh đã phân tích tới module phần cứng tương ứng, chuyển đổi định danh logic thành thông tin mạng Zigbee. \\ \hline
+Light Control & \path|light_ctrl.c| & Đóng gói bản tin ZCL On/Off và Level gửi xuống NCP để điều khiển thiết bị đèn vật lý. \\ \hline
+Device Registry & \path|device_registry.c| & Quản lý cơ sở dữ liệu lưu tạm của các thiết bị trong mạng vô tuyến (EUI64, Node ID, Endpoints). \\ \hline
+Rule Engine & \path|rule_engine.c| & Thực thi các liên kết cục bộ (local rules) giữa switch và light khi cấu hình môi trường được kích hoạt. \\ \hline
+\end{tabular}
+\end{table}
 
-Callback nhận bản tin không điều khiển Zigbee trực tiếp. Bản tin được đưa vào ring buffer có khóa đồng bộ; vòng lặp chính lấy từng phần tử để xử lý. Giới hạn của cách làm này là hàng đợi có kích thước hữu hạn, nhưng đổi lại callback MQTT kết thúc nhanh và không chặn luồng mạng.
+Bảng \ref{tab:ch4-gateway-modules} thể hiện rõ sự phân công trách nhiệm của từng file mã nguồn trong Gateway Edge, giúp hệ thống hoạt động ổn định và dễ bảo trì.
 
-\subsection{Phân tích và thực thi lệnh}
-
-Gateway kiểm tra phiên bản envelope, định danh lệnh, thao tác và đích. Lệnh điều khiển đèn được chuyển thành ZCL On/Off command. Lệnh dành cho Gateway, như mở mạng hoặc rediscover thiết bị, được chuyển tới module quản lý mạng. Sau khi xử lý, Gateway phát command reply với trạng thái và lý do lỗi nếu có.
-
-\subsection{Discovery và registry thiết bị}
-
-Khi một node tham gia mạng, Gateway lấy EUI-64, địa chỉ mạng và Simple Descriptor để phân loại thiết bị. Kết quả được lưu trong registry cục bộ và phát lên topic registry. Cloud sử dụng dữ liệu này để tạo hoặc cập nhật bản ghi thiết bị. Nếu một thiết bị chưa thể phân loại, hệ thống cần giữ trạng thái chưa xác định và thử lại, không tự gán thành một loại đã biết.
-
-\subsection{Trạng thái, sự kiện và luật cục bộ}
-
-Callback báo cáo thuộc tính tạo bản tin reported state. Callback nút nhấn hoặc cảm biến tạo bản tin event. Rule engine có thể dùng sự kiện công tắc hoặc chuyển động để gửi lệnh tới đèn ngay tại Gateway. Xử lý cục bộ giảm độ trễ và vẫn hoạt động khi mất kết nối Cloud, nhưng cấu hình luật phải được đồng bộ để tránh khác biệt giữa Cloud và Gateway.
-
-\section{Triển khai Cloud Backend, cơ sở dữ liệu và phân quyền}
+% ========================================
+% 4.5 TRIỂN KHAI CLOUD BACKEND
+% ========================================
+\section{Triển khai Cloud Backend}
 \label{sec:ch4-cloud}
 
-Hình \ref{fig:ch4-cloud-mobile-flow} trình bày các module Cloud và điểm nối với Mobile App. Sơ đồ chỉ tập trung vào xử lý phần mềm phía trên Gateway.
+Cloud Backend đóng vai trò là bộ não điều phối tập trung của hệ thống, quản lý dữ liệu, cung cấp giao diện lập trình cho ứng dụng di động và thực hiện các chức năng tự động hóa phức tạp. Lớp ứng dụng này được xây dựng bằng ngôn ngữ Python, sử dụng framework \texttt{FastAPI} bất đồng bộ (async), kết hợp với thư viện ORM \texttt{SQLAlchemy} để làm việc với hệ quản trị cơ sở dữ liệu quan hệ PostgreSQL.
+
+\subsection{FastAPI app lifecycle và router}
+\label{sec:ch4-cloud-lifecycle}
+
+Tệp tin \path|cloud/app/main.py| là điểm khởi động của ứng dụng Cloud Backend. Trong hàm sự kiện vòng đời khởi tạo (\texttt{lifespan}), ứng dụng sẽ thiết lập kết nối cơ sở dữ liệu, khởi tạo dịch vụ MQTT client và kích hoạt tiến trình chạy nền xử lý sự kiện timeout của lệnh điều khiển. Các nhóm API được chia nhỏ và quản lý trong các file router riêng biệt trong thư mục \path|routers/|:
+\begin{itemize}
+    \item \path|routers/devices.py|: Cung cấp API đọc thông tin danh sách và chi tiết thiết bị cùng các trạng thái được báo cáo tương ứng.
+    \item \path|routers/commands.py|: Tiếp nhận các yêu cầu điều khiển từ Mobile App, khởi tạo tiến trình ghi nhận lệnh và truyền tin không đồng bộ.
+    \item \path|routers/events.py|: Cung cấp lịch sử sự kiện của các thiết bị phục vụ chức năng hiển thị log trên ứng dụng.
+    \item \path|routers/automations.py|: Quản lý các thao tác CRUD (tạo, đọc, sửa, xóa) đối với các luật tự động hóa trên Cloud.
+    \item \path|routers/gateways.py| và \path|routers/provisioning.py|: Điều khiển các tính năng mức hệ thống của Gateway như mở/đóng permit join hoặc kích hoạt quét lại thiết bị.
+\end{itemize}
+
+\subsection{Database model và command lifecycle}
+\label{sec:ch4-cloud-models}
+
+Các mô hình dữ liệu chính được định nghĩa bằng ORM trong file \path|cloud/app/models.py|. Hệ thống bao gồm các bảng quan hệ cơ bản như \texttt{Device}, \texttt{DeviceState}, \texttt{Event}, \texttt{Command}, \texttt{Automation} và \texttt{ProvisioningSession}. 
+
+Một thiết kế quan trọng cần nhấn mạnh là vòng đời của lệnh điều khiển (\texttt{Command}). Lệnh được khởi tạo trên DB với trạng thái ban đầu là \texttt{accepted}, sau đó Cloud publish thông điệp MQTT và chuyển sang trạng thái \texttt{queued}. Khi nhận được phản hồi ACK từ Gateway qua topic reply, Cloud cập nhật trạng thái lệnh tương ứng thành \texttt{executed} hoặc \texttt{failed}. Nếu lệnh không nhận được phản hồi sau một khoảng thời gian cấu hình sẵn, tiến trình chạy nền \path|cloud/app/command_timeout.py| sẽ tự động quét và cập nhật trạng thái lệnh thành \texttt{timeout}.
+
+\subsection{Cấu hình biến môi trường}
+\label{sec:ch4-env}
+
+Mọi tham số cấu hình nhạy cảm của Cloud Backend được tách biệt khỏi mã nguồn và quản lý thông qua thư viện \texttt{Pydantic Settings} bằng các biến môi trường có tiền tố \texttt{SB\_}. Việc phân tách này bảo vệ hệ thống khỏi nguy cơ rò rỉ thông tin đăng nhập trên các hệ thống quản lý mã nguồn (như GitHub). Bảng \ref{tab:ch4-env} thể hiện các cấu hình chính.
+
+\begin{table}[H]
+\centering
+\caption{Danh mục biến môi trường của dịch vụ Cloud Backend}
+\label{tab:ch4-env}
+\footnotesize
+\begin{tabular}{|p{4.2cm}|p{9.8cm}|}
+\hline
+\textbf{Biến môi trường} & \textbf{Vai trò và ý nghĩa cấu hình} \\ \hline
+\texttt{SB\_DATABASE\_URL} & Chuỗi kết nối bất đồng bộ tới database PostgreSQL (chứa credentials, địa chỉ máy chủ và tên DB). \\ \hline
+\texttt{SB\_MQTT\_HOST}, \texttt{SB\_MQTT\_PORT} & Địa chỉ IP/Domain và cổng kết nối vô tuyến của MQTT Mosquitto Broker. \\ \hline
+\texttt{SB\_MQTT\_USERNAME}, \texttt{SB\_MQTT\_PASSWORD} & Thông tin tài khoản xác thực kết nối MQTT để phân quyền truy cập. \\ \hline
+\texttt{SB\_COMMAND\_TIMEOUT\_MS} & Ngưỡng thời gian tối đa (mili-giây) Cloud chờ phản hồi của Gateway trước khi đánh dấu timeout cho lệnh. \\ \hline
+\texttt{SB\_TENANT\_ID}, \texttt{SB\_SITE\_ID} & Thông tin namespace định danh phục vụ phân chia tài nguyên và xây dựng cấu trúc cây topic. \\ \hline
+\end{tabular}
+\end{table}
+
+Bảng~\ref{tab:ch4-env} liệt kê các biến môi trường bắt buộc cần cấu hình trước khi khởi động dịch vụ Cloud Backend trên môi trường production. Việc tách biệt cấu hình nhạy cảm ra khỏi mã nguồn thông qua các biến môi trường là thực hành bảo mật tiêu chuẩn, đảm bảo thông tin đăng nhập không bị lộ qua hệ thống quản lý phiên bản mã nguồn.
+
+\subsection{MQTT service và timeout worker}
+\label{sec:ch4-sync-impl}
+
+Dịch vụ \path|cloud/app/mqtt_client.py| chạy song song dưới dạng một tiến trình bất đồng bộ trong FastAPI. Nó subscribe các topic thông báo từ Gateway bao gồm reported state, events, registry và gateway health. Khi nhận được bản tin báo cáo trạng thái mới từ một thiết bị, module này sẽ thực hiện hàm upsert (cập nhật nếu có hoặc chèn mới) trạng thái vào bảng \texttt{device\_states}. 
+
+Tiến trình timeout worker chạy độc lập định kỳ (mỗi giây một lần) để quét các bản ghi lệnh điều khiển có thời gian tạo vượt quá thời gian timeout quy định mà vẫn đang ở trạng thái trung gian, đảm bảo tính chính xác của dữ liệu hệ thống.
 
 \begin{figure}[H]
-\centering
-\includegraphics[width=0.86\textwidth]{Images/mermaid/ch4_cloud_mobile_flow.png}
-\caption{Các module Cloud Backend và luồng trao đổi với Mobile App}
-\label{fig:ch4-cloud-mobile-flow}
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cCloud, minimum width=3.4cm] (acc)  at (0,0)    {ACCEPTED\\(Created in DB)};
+        \node[fblk, cCloud, minimum width=3.4cm] (que)  at (0,-1.9) {QUEUED\\(Published to MQTT)};
+        \node[fblk, cCloud, minimum width=3.4cm] (sent) at (0,-3.8) {SENT\\(ACK by Gateway)};
+        \node[fblk, cCloud, minimum width=3.4cm] (exec) at (0,-5.7) {EXECUTED\\(ZCL sent by GW)};
+        \node[fblk, cWarn, minimum width=3.4cm] (tmo)  at (5.5,-1.9) {TIMEOUT\\(Expired on DB)};
+        \node[fblk, cWarn, minimum width=3.4cm] (fail) at (5.5,-3.8) {FAILED\\(Error occurred)};
+        \draw[farr] (acc)  -- (que);
+        \draw[farr] (que)  -- (sent);
+        \draw[farr] (sent) -- (exec);
+        \draw[farr] (que)  -- node[flbl, above] {timeout} (tmo);
+        \draw[farr] (sent) -- node[flbl, above] {error} (fail);
+        \draw[farr] (acc.east) -- node[flbl, above, pos=0.12] {error} ++(7.6,0) |- (fail.east);
+    \end{tikzpicture}
+    \caption{Lược đồ chuyển trạng thái trong vòng đời lệnh điều khiển trên Cloud Backend.}
+    \label{fig:ch4-cloud-lifecycle}
 \end{figure}
 
-\subsection{Vòng đời ứng dụng và router}
+Lược đồ vòng đời lệnh điều khiển trên Cloud Backend (Hình \ref{fig:ch4-cloud-lifecycle}) chứng minh tính chặt chẽ trong thiết kế trạng thái lệnh. Nhờ các trạng thái trung gian, Mobile App có thể biết chính xác lệnh của mình đang bị nghẽn ở Cloud, ở đường truyền MQTT, hay tại Gateway.
 
-Tệp \path|cloud/app/main.py| tạo FastAPI application, khởi tạo cơ sở dữ liệu, kết nối MQTT và chạy hai background worker. Command timeout worker đánh dấu lệnh quá hạn. Device offline reaper đánh dấu thiết bị ngoại tuyến khi \texttt{last\_seen\_at} vượt ngưỡng cấu hình. Các router xác thực, thiết bị, lệnh, sự kiện, Gateway, tự động hóa và thêm thiết bị được đăng ký độc lập.
+\begin{table}[H]
+\centering
+\caption{Bản đồ phân rã chức năng các file mã nguồn Cloud Backend}
+\label{tab:ch4-cloud-modules}
+\footnotesize
+\begin{tabular}{|p{3.2cm}|p{3.5cm}|p{7.8cm}|}
+\hline
+\textbf{Module} & \textbf{Tệp tin mã nguồn} & \textbf{Vai trò và nhiệm vụ cụ thể} \\ \hline
+FastAPI Lifecycle & \path|cloud/app/main.py| & Điểm khởi chạy ứng dụng, khai báo các routers, quản lý vòng đời kết nối DB và Broker. \\ \hline
+Database Models & \path|cloud/app/models.py| & Định nghĩa các bảng dữ liệu bằng SQLAlchemy ORM quan hệ: devices, commands, automations, v.v. \\ \hline
+MQTT Client Service & \path|cloud/app/mqtt_client.py| & Lắng nghe tin báo cáo từ Gateway để lưu trữ trạng thái thiết bị và cập nhật kết quả thực hiện lệnh. \\ \hline
+Timeout Worker & \path|cloud/app/command_timeout.py| & Tiến trình quét nền định kỳ phát hiện và xử lý các bản ghi lệnh bị hết hạn phản hồi từ Gateway. \\ \hline
+API Routers & \path|cloud/app/routers/*.py| & Định nghĩa các endpoint REST phục vụ giao dịch dữ liệu với ứng dụng di động Flutter. \\ \hline
+\end{tabular}
+\end{table}
 
-\subsection{Mô hình dữ liệu và vòng đời lệnh}
+Bảng \ref{tab:ch4-cloud-modules} tóm tắt các tệp tin cấu thành dịch vụ Cloud Backend, phân định rõ các tầng xử lý từ API REST tới kết nối Broker và cơ sở dữ liệu.
 
-SQLAlchemy Object-Relational Mapping (ORM) là lớp ánh xạ object trong Python sang bảng quan hệ. Các model chính gồm người dùng, nhà, phòng, thiết bị, trạng thái, sự kiện, lệnh, luật tự động hóa và phiên thêm thiết bị. Khi Mobile App gửi lệnh, Cloud kiểm tra quyền, dịch thao tác sang hợp đồng Gateway, lưu bản ghi \texttt{accepted}, rồi mới phát MQTT. Phản hồi từ Gateway cập nhật cùng bản ghi thành trạng thái kết thúc.
-
-\subsection{Đăng nhập và quản lý phiên}
-
-Router xác thực kiểm tra tên đăng nhập, trạng thái người dùng và mật khẩu đã băm. Khi đăng nhập thành công, Cloud cấp access token và refresh token. Refresh token được lưu dưới dạng giá trị băm trong bảng riêng và có thể bị thu hồi khi đăng xuất. Thiết kế này tránh lưu token làm mới ở dạng rõ trong cơ sở dữ liệu.
-
-\subsection{Phân quyền và phạm vi truy cập}
-
-Dependency của FastAPI lấy người dùng hiện tại từ access token. Các endpoint thay đổi dữ liệu yêu cầu vai trò phù hợp. Sau kiểm tra vai trò, module \path|access_control.py| tiếp tục kiểm tra thiết bị hoặc luật tự động hóa có thuộc nhà của người dùng hay không. Vì vậy, việc có vai trò \texttt{parent} không tự động cho phép truy cập mọi thiết bị trong hệ thống.
-
-\subsection{Nhận dữ liệu MQTT}
-
-MQTT service đăng ký các topic reported, telemetry, event, registry, command reply, gateway health và automation. Mỗi loại bản tin được chuyển tới một handler riêng. Handler dùng phiên cơ sở dữ liệu bất đồng bộ để lưu dữ liệu, cập nhật \texttt{last\_seen\_at} và đánh dấu thiết bị trực tuyến. Payload rỗng trên retained topic được hiểu là yêu cầu xóa bản tin giữ lại và không được phân tích như JSON.
-
+% ========================================
+% 4.6 TRIỂN KHAI MOBILE APP
+% ========================================
 \section{Triển khai Mobile App}
 \label{sec:ch4-mobile}
 
-Mobile App được tổ chức thành ba vùng: model miền nghiệp vụ, repository dữ liệu và giao diện. Repository từ xa gọi API thật; repository mô phỏng hỗ trợ kiểm thử giao diện. Provider phân phối view model cho các màn hình và cập nhật widget khi trạng thái thay đổi.
+Ứng dụng di động (Mobile App) là giao diện tương tác trực tiếp của người dùng với hệ thống Smart Building. Ứng dụng được xây dựng bằng công nghệ đa nền tảng Flutter (ngôn ngữ Dart), tổ chức mã nguồn theo mô hình phân lớp rõ ràng nhằm tách biệt logic nghiệp vụ khỏi tầng hiển thị giao diện người dùng (UI).
 
-\subsection{Đăng nhập và lưu phiên}
+Một nguyên tắc kiến trúc cực kỳ quan trọng cần khẳng định là: \textbf{Mobile App không kết nối trực tiếp đến MQTT Broker}. Mọi yêu cầu điều khiển hay truy vấn dữ liệu của người dùng đều đi qua cổng bảo mật REST API của Cloud Backend. Lựa chọn thiết kế này mang tính chất định hướng sản phẩm (product-facing) vì nó giúp đơn giản hóa việc quản lý trạng thái kết nối trên thiết bị di động (tránh hao pin do duy trì socket MQTT liên tục), đồng thời tập trung hóa việc kiểm tra quyền truy cập và lưu lịch sử bảo mật tại máy chủ Cloud.
 
-Repository xác thực gọi các API đăng nhập, làm mới phiên, lấy thông tin người dùng và đăng xuất. Access token được gắn vào header của yêu cầu cần xác thực. Lớp lưu token bảo mật giữ phiên trong vùng lưu trữ của hệ điều hành. Khi App khởi động, auth gate thử khôi phục phiên trước khi quyết định hiển thị màn hình đăng nhập hay giao diện chính.
-
-\subsection{Giám sát và điều khiển thiết bị}
-
-\path|RemoteDeviceRepository| lấy danh sách thiết bị, trạng thái mới nhất và sự kiện. Khi người dùng bật hoặc tắt đèn, repository gửi yêu cầu tạo lệnh. View model hiển thị trạng thái chờ, truy vấn command status và tải lại dữ liệu sau khi lệnh kết thúc. App không tự đổi trạng thái đèn thành công trước khi nhận dữ liệu từ Cloud.
-
-\subsection{Tự động hóa và thêm thiết bị}
-
-Repository tự động hóa cung cấp các thao tác tạo, sửa, bật, tắt và xóa luật. Repository thêm thiết bị tạo phiên provisioning, theo dõi trạng thái và gửi các yêu cầu liên quan tới Gateway thông qua Cloud. Quyền thực hiện vẫn do Cloud quyết định; việc hiển thị nút trong App chỉ giúp giao diện phù hợp với vai trò.
-
-\section{Triển khai môi trường demo}
-\label{sec:ch4-deployment}
-
-Hình \ref{fig:ch4-deployment} mô tả các container và thành phần chạy trong môi trường demo. Sơ đồ không biểu diễn chi tiết hạ tầng mạng bên ngoài để giữ kích thước vừa phải.
+Mã nguồn ứng dụng di động được phân rã thành các lớp chính:
+\begin{itemize}
+    \item \textbf{Lớp API Client:} Nằm tại tệp \path|mobile_app/lib/data/services/api_client.dart|, phụ trách thiết lập kết nối HTTP Client, đính kèm cấu hình header và gửi nhận các payload JSON REST API với Cloud Backend.
+    \item \textbf{Lớp Data Repositories:} Nằm trong thư mục \path|mobile_app/lib/data/repositories/| (ví dụ \path|remote_device_repository.dart|). Lớp này nhận dữ liệu thô từ API Client, chuyển đổi thành các thực thể dữ liệu (entities) chuẩn của ứng dụng và cung cấp cho tầng giao diện.
+    \item \textbf{Lớp Domain Models:} Nằm trong thư mục \path|mobile_app/lib/domain/|, định nghĩa cấu trúc dữ liệu của các thực thể trong ứng dụng như \texttt{Device}, \texttt{Command}, \texttt{AutomationRule} để đảm bảo tính nhất quán của dữ liệu.
+    \item \textbf{Lớp UI Features:} Nằm tại thư mục \path|mobile_app/lib/ui/features/|, bao gồm các màn hình chức năng như danh sách thiết bị (\path|devices_view.dart|), chi tiết điều khiển (\path|device_detail_view.dart|), quản lý luật tự động hóa (\path|automation_rules_view.dart|) và theo dõi lịch sử hệ thống (\path|logs_view.dart|).
+\end{itemize}
 
 \begin{figure}[H]
-\centering
-\includegraphics[width=0.78\textwidth]{Images/mermaid/ch4_deployment.png}
-\caption{Các thành phần chính trong môi trường demo}
-\label{fig:ch4-deployment}
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cMob,   minimum width=5.2cm] (ui)     at (0,0)    {\textbf{UI Features (Views)}\\devices, detail, rules, logs};
+        \node[fblk, cCloud, minimum width=5.2cm] (vm)     at (0,-1.6) {\textbf{View Models (State)}\\Provider / ChangeNotifier};
+        \node[fblk, cQueue, minimum width=5.2cm] (repo)   at (0,-3.2) {\textbf{Repositories}\\remote\_device\_repository.dart};
+        \node[fblk, cGw,    minimum width=5.2cm] (client) at (0,-4.8) {\textbf{API Client (HTTP)}\\api\_client.dart};
+        \node[fblk, cInfra, minimum width=5.2cm] (cl)     at (0,-6.4) {\textbf{Cloud Backend REST API}};
+        \draw[farr] (ui) -- (vm);
+        \draw[farr] (vm) -- (repo);
+        \draw[farr] (repo) -- (client);
+        \draw[farr] (client) -- node[flbl, right] {HTTPS GET/POST} (cl);
+    \end{tikzpicture}
+    \caption{Kiến trúc phân lớp cấu trúc mã nguồn bên trong ứng dụng di động Flutter.}
+    \label{fig:ch4-mobile-layers}
 \end{figure}
 
-Docker Compose khởi chạy Cloud Backend, PostgreSQL và MQTT Broker trên máy chủ. Gateway chạy tại mạng cục bộ nơi có EFR32 NCP và kết nối tới broker bằng thông tin cấu hình môi trường. Mobile App gọi địa chỉ API của Cloud. Khi triển khai qua mạng công cộng, cấu hình HTTPS, TLS, credential và Access Control List (ACL), tức danh sách quy định quyền trên MQTT topic, phải được bật và kiểm tra độc lập.
+Sơ đồ phân lớp của Mobile App ở Hình \ref{fig:ch4-mobile-layers} chỉ ra luồng giao tiếp một chiều từ trên xuống dưới. Nhờ cấu trúc này, khi cần thay đổi giao diện hiển thị, nhà phát triển chỉ cần chỉnh sửa lớp UI mà không làm ảnh hưởng đến logic truyền nhận dữ liệu ở lớp API Client phía dưới.
 
-\section{Luồng điều khiển đèn xuyên suốt}
-\label{sec:ch4-e2e-command}
+\begin{table}[H]
+\centering
+\caption{Bản đồ cấu trúc thư mục mã nguồn và vai trò của Mobile App}
+\label{tab:ch4-mobile-map}
+\footnotesize
+\begin{tabular}{|p{3.2cm}|p{4.2cm}|p{7.1cm}|}
+\hline
+\textbf{Lớp cấu trúc} & \textbf{Đường dẫn thư mục / file} & \textbf{Vai trò và nhiệm vụ cụ thể} \\ \hline
+API Client & \path|lib/data/services/api_client.dart| & Gửi nhận các gói tin HTTPS REST API bất đồng bộ với Cloud Backend. \\ \hline
+Repositories & \path|lib/data/repositories/*| & Ánh xạ API response JSON thành các thực thể dữ liệu Dart có kiểu dữ liệu tường minh. \\ \hline
+Domain Models & \path|lib/domain/*| & Khai báo mô hình dữ liệu chính thức cho các đối tượng thiết bị, sự kiện, lệnh và phòng. \\ \hline
+UI Features & \path|lib/ui/features/*| & Thiết kế giao diện hiển thị danh sách thiết bị, điều khiển đèn, quản trị rules và xem log. \\ \hline
+\end{tabular}
+\end{table}
 
-Hình \ref{fig:ch4-e2e-command-flow} mô tả trình tự của một lệnh bật đèn. Sequence diagram được tách khỏi sơ đồ kiến trúc để chỉ thể hiện thứ tự thời gian.
+Bảng \ref{tab:ch4-mobile-map} cung cấp cái nhìn chi tiết về cách phân bổ các file mã nguồn của ứng dụng Mobile, củng cố tính chặt chẽ trong triển khai phần mềm phía máy khách.
+
+% ========================================
+% 4.7 TRIỂN KHAI MÔI TRƯỜNG CHẠY THỰC TẾ
+% ========================================
+\section{Triển khai môi trường chạy thực tế}
+\label{sec:ch4-deploy-issues}
+
+Để chứng minh tính khả thi của giải pháp trong thực tế, Cloud Backend, MQTT Broker và Database được đóng gói và triển khai trên máy chủ điện toán đám mây Amazon EC2 (chạy hệ điều hành Ubuntu 22.04 LTS). Quy trình triển khai sử dụng công nghệ container hóa thông qua công cụ Docker và Docker Compose nhằm đảm bảo tính đồng nhất giữa môi trường phát triển cục bộ và môi trường chạy thực tế.
+
+Tệp tin \path|deploy/docker-compose.prod.yml| cấu hình ba container dịch vụ chính chạy trong cùng một mạng ảo nội bộ (Docker Network):
+\begin{itemize}
+    \item \texttt{sb-postgres}: Chạy PostgreSQL 16 làm cơ sở dữ liệu chính của hệ thống, chỉ expose cổng kết nối \texttt{5432} nội bộ cho Cloud API, không cho phép truy cập từ môi trường internet ngoài nhằm bảo mật dữ liệu.
+    \item \texttt{sb-mosquitto}: Chạy Mosquitto MQTT Broker làm trục truyền tin, expose cổng \texttt{1883} (cho kết nối TCP của Gateway) và \texttt{9001} (cho kết nối WebSockets nếu cần mở rộng sau này).
+    \item \texttt{sb-cloud-api}: Chạy ứng dụng FastAPI Cloud Backend, expose cổng \texttt{8000} ra bên ngoài để ứng dụng di động kết nối qua REST API.
+\end{itemize}
+
+Các cấu hình bảo mật được quản lý thông qua tệp tin \path|.env| nằm trên máy chủ EC2. Để đảm bảo an toàn thông tin, các thông số xác thực như mật khẩu truy cập cơ sở dữ liệu, khóa bảo mật JWT hay thông tin đăng nhập của MQTT Broker không được ghi trực tiếp vào các tệp tin cấu hình đưa lên GitHub, mà được tự động nạp từ các biến môi trường tại thời điểm khởi động container.
 
 \begin{figure}[H]
-\centering
-\includegraphics[width=0.9\textwidth]{Images/mermaid/ch4_e2e_command_sequence.png}
-\caption{Trình tự xử lý lệnh bật đèn từ Mobile App tới thiết bị}
-\label{fig:ch4-e2e-command-flow}
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (pg)  at (0,0)   {PostgreSQL DB\\(Internal Port 5432)};
+        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (api) at (4.6,0) {FastAPI Cloud API\\(Exposed Port 8000)};
+        \node[fblk, cInfra, minimum width=3.4cm, minimum height=1.1cm] (mos) at (9.2,0) {Mosquitto Broker\\(Exposed Port 1883)};
+        \node[anchor=west, font=\footnotesize\bfseries] (title) at (-2.0,1.05) {AWS EC2 Server (Ubuntu Linux)};
+        \begin{scope}[on background layer]
+            \node[draw, rounded corners=3pt, fill=black!4, line width=0.5pt, fit=(pg)(api)(mos)(title), inner sep=5pt] (ec2) {};
+        \end{scope}
+        \node[flbl, anchor=south east] at (ec2.south east) {Packaged with Docker Compose};
+        \node[fblk, cGw,  minimum width=3.4cm] (gw)  at (9.2,-3.4) {Gateway Edge\\(Z3GatewayHost C)};
+        \node[fblk, cMob, minimum width=3.4cm] (mob) at (4.6,-3.4) {Mobile App\\(Flutter Client)};
+        \draw[fbi] (api) -- (pg);
+        \draw[fbi] (api) -- (mos);
+        \draw[fbi]  (gw)  -- node[flbl, left] {MQTT (1883)} (mos);
+        \draw[farr] (mob) -- node[flbl, right] {REST HTTPS (8000)} (api);
+    \end{tikzpicture}
+    \caption{Kiến trúc triển khai và luồng kết nối mạng của các thành phần trên AWS EC2.}
+    \label{fig:ch4-deployment-view}
 \end{figure}
 
-Mobile App gửi yêu cầu có access token. Cloud xác thực người dùng, kiểm tra quyền trên thiết bị và tạo bản ghi lệnh. MQTT Broker chuyển request tới Gateway. Gateway gửi ZCL On command tới đèn, sau đó phát reply và trạng thái được báo cáo. Cloud cập nhật lệnh và trạng thái; Mobile App truy vấn lại để hiển thị kết quả. Nếu không có reply trước thời hạn, timeout worker chuyển lệnh sang \texttt{timeout}.
+Sơ đồ mạng triển khai ở Hình \ref{fig:ch4-deployment-view} chỉ rõ biên giới bảo mật của Docker Network trên máy chủ AWS EC2. Dữ liệu nhạy cảm lưu trong cơ sở dữ liệu PostgreSQL chỉ có thể được truy cập gián tiếp thông qua các endpoint API của FastAPI, bảo vệ an toàn cho thông tin của hệ thống tòa nhà thông minh.
 
-\section{Giới hạn triển khai hiện tại}
-\label{sec:ch4-limitations}
+% ========================================
+% 4.8 LUỒNG VẬN HÀNH END-TO-END
+% ========================================
+\section{Luồng vận hành End-to-End Command}
+\label{sec:ch4-e2e}
 
-Phiên bản hiện tại tập trung vào một Gateway và số lượng thiết bị nhỏ trong môi trường thử nghiệm. Mobile App dùng cơ chế truy vấn lại dữ liệu nên độ cập nhật phụ thuộc chu kỳ gọi API. Registry và rule engine cần thêm thử nghiệm dài hạn khi số thiết bị và số luật tăng. Việc triển khai production còn cần giám sát tập trung, sao lưu cơ sở dữ liệu, xoay vòng credential và kiểm thử phục hồi sau lỗi.
+Để chứng minh sự phối hợp đồng bộ giữa các thành phần đã triển khai, luồng vận hành điều khiển thiết bị từ đầu đến cuối (End-to-End Command Flow) được thiết kế qua chuỗi 12 bước thực hiện cụ thể. Ví dụ điển hình cho luồng này là hành động người dùng thực hiện thao tác bật/tắt một thiết bị đèn từ giao diện ứng dụng di động:
 
-Các giới hạn trên là ranh giới của phần triển khai hiện tại, không được xem là kết quả thất bại. Chương 5 sẽ chuyển từng yêu cầu thành test case và chỉ ghi nhận kết quả khi có evidence tương ứng.
+\begin{enumerate}
+    \item \textbf{Tương tác người dùng:} Người dùng nhấn vào biểu tượng Toggle bật/tắt đèn trên màn hình giao diện ứng dụng di động Flutter.
+    \item \textbf{Yêu cầu API khách:} Lớp UI kích hoạt ViewModel, gọi API Client gửi một yêu cầu HTTP POST có dạng JSON payload chứa lệnh tới địa chỉ endpoint \path|/api/devices/{device_id}/command|.
+    \item \textbf{Tiếp nhận API chủ:} Ứng dụng FastAPI trên Cloud Backend nhận yêu cầu REST, tiến hành xác thực cấu trúc dữ liệu đầu vào thông qua Pydantic schema.
+    \item \textbf{Lưu vết cơ sở dữ liệu:} Cloud Backend tạo và lưu một bản ghi \texttt{Command} mới vào bảng dữ liệu PostgreSQL với trạng thái ban đầu là \texttt{accepted}.
+    \item \textbf{Publish lệnh điều khiển:} Dịch vụ MQTT client trên Cloud Backend đóng gói lệnh vào một phong bì tin tiêu chuẩn \texttt{sb.v1} và publish lên MQTT topic tương ứng có dạng: \path|sb/v1/{tenant}/{site}/{gateway}/commands/{command_id}/request|.
+    \item \textbf{Định tuyến Broker:} MQTT Mosquitto Broker nhận thông điệp, thực hiện định tuyến và chuyển tiếp bản tin tới các client đang subscribe.
+    \item \textbf{Nhận tin tại Gateway:} Gateway Edge C nhận bản tin điều khiển từ Broker thông qua thư viện \texttt{libmosquitto} trong tệp \texttt{app\_mqtt.c}.
+    \item \textbf{Xếp hàng đợi thực thi:} Gateway đưa gói tin đã nhận vào hàng đợi Command Queue nội bộ để giải phóng thread mạng.
+    \item \textbf{Giải mã và Dispatch:} Vòng lặp chính của Gateway lấy lệnh khỏi hàng đợi, module \texttt{cmd\_handler.c} parse payload JSON và \texttt{device\_dispatch.c} ánh xạ sang địa chỉ mạng Zigbee tương ứng của thiết bị đích.
+    \item \textbf{Truyền vô tuyến vật lý:} Module \texttt{light\_ctrl.c} đóng gói và truyền lệnh ZCL On/Off vô tuyến qua chip EFR32 NCP tới thiết bị đèn Z3Light vật lý. Đèn đổi trạng thái và phản hồi bản tin ACK.
+    \item \textbf{Phản hồi trạng thái:} Gateway ghi nhận phản hồi từ thiết bị, publish bản tin xác nhận thành công lên topic reply \path|commands/{command_id}/reply|, đồng thời gửi báo cáo trạng thái mới của đèn lên topic \path|reported| tương ứng.
+    \item \textbf{Cập nhật và Hiển thị:} Cloud Backend nhận bản tin reply và reported state, cập nhật bảng cơ sở dữ liệu PostgreSQL. Mobile App (thông qua cơ chế polling hoặc tải lại trang) nhận được trạng thái mới và hiển thị biểu tượng đèn đã bật lên màn hình.
+\end{enumerate}
 
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \tikzset{stp/.style={fblk, minimum width=2.5cm, minimum height=1.0cm}}
+        \node[stp, cMob]   (s1) at (0,0)    {1. Mobile App\\Toggle Action};
+        \node[stp, cCloud] (s2) at (3.1,0)  {2. Cloud API\\HTTP POST};
+        \node[stp, cCloud] (s3) at (6.2,0)  {3. Database\\Store Command};
+        \node[stp, cInfra] (s4) at (9.3,0)  {4. MQTT Broker\\Mosquitto Request};
+        \node[stp, cGw]    (s5) at (12.4,0) {5. Gateway\\app\_mqtt.c Queue};
+        \node[stp, cGw]    (s6)  at (12.4,-2.3) {6. Gateway\\cmd\_handler.c};
+        \node[stp, cGw]    (s7)  at (9.3,-2.3)  {7. Gateway\\device\_dispatch.c};
+        \node[stp, cGw]    (s8)  at (6.2,-2.3)  {8. Gateway\\light\_ctrl.c};
+        \node[stp, cWarn]  (s9)  at (3.1,-2.3)  {9. Zigbee Light\\Physical Exec};
+        \node[stp, cGw]    (s10) at (0,-2.3)    {10. Gateway\\MQTT Reply};
+        \node[stp, cCloud] (s11) at (0,-4.6)    {11. Cloud API\\Update DB};
+        \node[stp, cMob]   (s12) at (3.1,-4.6)  {12. Mobile App\\Update UI};
+        \draw[farr] (s1) -- (s2);
+        \draw[farr] (s2) -- node[flbl, above] {lưu DB} (s3);
+        \draw[farr] (s2.south) -- ++(0,-0.6) -| (s4.south);
+        \node[flbl, below] at (6.2,-1.1) {publish};
+        \draw[farr] (s4) -- (s5);
+        \draw[farr] (s5) -- (s6);
+        \draw[farr] (s6) -- (s7);
+        \draw[farr] (s7) -- (s8);
+        \draw[farr] (s8) -- (s9);
+        \draw[farr] (s9) -- (s10);
+        \draw[farr] (s10) -- (s11);
+        \draw[farr] (s11) -- (s12);
+        \draw[farr, dashed] (s12.south) -- ++(0,-0.8) -| (-1.6,0) -- (s1.west);
+        \node[flbl, below] at (0.75,-5.9) {Polling / cập nhật UI};
+    \end{tikzpicture}
+    \caption{Trình tự luồng dữ liệu 12 bước điều khiển thiết bị đèn từ Mobile App.}
+    \label{fig:ch4-e2e-command-flow}
+\end{figure}
+
+Sơ đồ luồng 12 bước ở Hình \ref{fig:ch4-e2e-command-flow} chỉ ra tính bất đồng bộ trong thiết kế hệ thống. Bằng cách lưu vết lệnh trên cơ sở dữ liệu và trao đổi qua MQTT broker, hệ thống đảm bảo lệnh luôn được kiểm soát chặt chẽ ở mọi bước chạy, tránh hiện tượng mất lệnh không rõ nguyên nhân.
+
+% ========================================
+% 4.9 GIỚI HẠN HIỆN TẠI VÀ PRODUCT
+% ========================================
+\section{Giới hạn hiện tại và hướng product hóa}
+\label{sec:ch4-ota}
+
+Mặc dù hệ thống đã xây dựng thành công các luồng vận hành cơ bản ổn định của một giải pháp IoT đa lớp, việc đánh giá trung thực ranh giới kỹ thuật hiện tại của phiên bản prototype là cực kỳ cần thiết để định hướng nâng cấp hệ thống thành một giải pháp cấp độ sản phẩm (product-ready) thực tế.
+
+Một trong những giới hạn lớn nhất của phiên bản hiện tại là tính năng cập nhật firmware từ xa (OTA). Trong cấu trúc mã nguồn, dự án mới chỉ triển khai tài liệu thiết kế đặc tả hợp đồng dữ liệu tại tệp \path|docs/OTA_CAMPAIGN_CONTRACT.md| và một số cấu hình hỗ trợ OTA của hãng Silicon Labs ở phía thiết bị. Hệ thống \textbf{chưa có runtime chạy thực tế cho tính năng OTA}. 
+
+Cụ thể, Cloud Backend chưa hiện thực các API và mô hình quản lý chiến dịch cập nhật (\path|/api/ota/*|); Gateway Edge C chưa có module tải tệp tin firmware từ xa qua giao thức HTTP, chưa xử lý việc xác thực mã băm SHA256 hay kích thước tệp tin, chưa đưa tệp tin firmware vào thư mục lưu trữ cục bộ để đẩy xuống thiết bị thông qua Zigbee OTA Cluster, và chưa báo cáo tiến độ cập nhật về Cloud. Do đó, tính năng này được xác định là hướng phát triển trong tương lai.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
+        \node[fblk, cMob, minimum width=3.7cm, minimum height=2.6cm] (c1) at (0,0) {\textbf{Đã triển khai}\\\textit{(Prototype Core)}\\NCP/Light/Switch\\Gateway MQTT Native\\Cloud Commands \& DB\\Mobile App \& API\\EC2 Compose Deploy};
+        \node[fblk, cQueue, minimum width=3.7cm, minimum height=2.6cm] (c2) at (5.0,0) {\textbf{Mức Contract}\\\textit{(System Boundary)}\\OTA Campaign Schema\\Silicon Labs Configs\\Partial Local Rules\\Mobile Provisioning UI};
+        \node[fblk, cFut, minimum width=3.7cm, minimum height=2.6cm] (c3) at (10.0,0) {\textbf{Hướng Product}\\\textit{(Future Work)}\\Security Hardening\\OTA Runtime Engine\\Multi-Gateway Scale\\Observability \& Alerts\\Onboarding UX};
+        \draw[farr, line width=0.9pt] (c1) -- (c2);
+        \draw[farr, line width=0.9pt] (c2) -- (c3);
+    \end{tikzpicture}
+    \caption{Biểu đồ ranh giới năng lực kỹ thuật và lộ trình sản phẩm hóa của hệ thống.}
+    \label{fig:ch4-product-readiness}
+\end{figure}
+
+Biểu đồ ranh giới năng lực hệ thống ở Hình \ref{fig:ch4-product-readiness} phân rõ ba mức độ trưởng thành của công nghệ. Trục lõi màu xanh đại diện cho phần đã hoàn thiện mã nguồn và sẵn sàng chạy thử nghiệm; trục màu vàng là ranh giới thiết kế đã cam kết; trục màu cam đại diện cho các hạng mục nghiên cứu phát triển tiếp theo.
+
+\begin{table}[H]
+\centering
+\caption{Bảng so sánh hiện trạng prototype và hướng sản phẩm hóa}
+\label{tab:ch4-product-boundary}
+\footnotesize
+\begin{tabular}{|p{2.6cm}|p{5.5cm}|p{6.4cm}|}
+\hline
+\textbf{Hạng mục} & \textbf{Hiện trạng phiên bản thử nghiệm} & \textbf{Giải pháp sản phẩm hóa trong tương lai} \\ \hline
+Cập nhật OTA & Mới có đặc tả thiết kế và cấu hình Silicon Labs, chưa có runtime. & Triển khai module tải HTTP tại Gateway, model quản lý campaign tại Cloud, thực thi truyền tải vô tuyến. \\ \hline
+Bảo mật & Cấu hình username/password cho MQTT. & Nâng cấp lên mTLS (cổng 8883), thiết lập cơ chế token JWT cho REST, mã hóa firmware artifact. \\ \hline
+Tự động hóa & Luật Switch-to-Light cấu hình cứng tại Gateway. & Đồng bộ hóa luật động (dynamic rules) từ Cloud xuống Rule Engine của Gateway qua MQTT desired topic. \\ \hline
+Khả năng giám sát & Log thô ghi ra tệp tin hoặc console của Docker. & Tích hợp công cụ giám sát Prometheus, hiển thị độ trễ và cảnh báo thiết bị offline lên Dashboard. \\ \hline
+Khả năng mở rộng & Quản lý một Gateway đơn lẻ trong phòng thí nghiệm. & Hỗ trợ kiến trúc đa Gateway (multi-gateway), phân vùng quản lý thiết bị theo các tòa nhà (multi-tenant). \\ \hline
+\end{tabular}
+\end{table}
+
+Bảng \ref{tab:ch4-product-boundary} chỉ ra chi tiết các khoảng trống công nghệ giữa phiên bản thử nghiệm hiện tại và một giải pháp IoT thương mại thực tế, thể hiện tư duy nghiêm túc và thực tế trong quá trình nghiên cứu khoa học của sinh viên.
+
+% ========================================
+% 4.10 TỔNG KẾT CHƯƠNG
+% ========================================
 \section{Tổng kết chương}
 \label{sec:ch4-summary}
 
-Chương 4 đã mô tả cách dữ liệu được tạo tại thiết bị Zigbee, chuyển qua Gateway, lưu tại Cloud và hiển thị trên Mobile App. Việc tách theo đầu vào, xử lý và đầu ra cho thấy ranh giới trách nhiệm của từng lớp. Các sơ đồ trong chương được tạo từ mã Mermaid lưu cùng repository để có thể chỉnh sửa và render lại khi kiến trúc thay đổi.
+Chương 4 đã trình bày một cách hệ thống quá trình hiện thực hóa thiết kế kiến trúc từ lý thuyết thành các thành phần mã nguồn chạy thực tế của hệ thống IoT Smart Building. Thông qua việc phân rã từng lớp chức năng bao gồm firmware Zigbee cho các kit phát triển, Gateway Edge viết bằng ngôn ngữ native C, Cloud Backend FastAPI và ứng dụng di động Flutter, đồ án đã chứng minh được khả năng làm chủ công nghệ và xây dựng giải pháp IoT hoàn chỉnh. 
+
+Đồng thời, chương này cũng chỉ ra một cách trung thực các giới hạn vận hành của hệ thống, đặc biệt là tính năng OTA mới dừng lại ở mức hợp đồng dữ liệu. Đây là tiền đề quan trọng để phân định rõ phạm vi kiểm thử và đánh giá hiệu năng hệ thống sẽ được trình bày chi tiết trong Chương 5 tiếp theo.

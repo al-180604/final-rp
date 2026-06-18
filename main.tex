@@ -41,10 +41,27 @@
 \usepackage{multirow}
 \usepackage{longtable}
 \usepackage{pdflscape}
+\usepackage{ragged2e}
+\newcolumntype{P}[1]{>{\RaggedRight\arraybackslash}p{#1}}
+\usepackage{seqsplit}
+% Monospace cho phép ngắt dòng ở bất kỳ ký tự nào (dùng cho chuỗi log/topic dài trong bảng)
+\newcommand{\mono}[1]{\texttt{\seqsplit{#1}}}
 
 % TikZ for cover page border
 \usepackage{tikz}
-\usetikzlibrary{calc}
+\usetikzlibrary{calc, arrows.meta, positioning, fit, backgrounds}
+% ===== Style thống nhất cho sơ đồ khối (Chương 4) =====
+\tikzset{
+  fblk/.style={draw, rounded corners=2pt, align=center, font=\footnotesize,
+               minimum height=0.95cm, minimum width=2.6cm, line width=0.5pt, inner sep=3pt},
+  farr/.style={draw, -{Stealth[length=2mm,width=1.6mm]}, line width=0.6pt, rounded corners=3pt},
+  fbi/.style={draw, {Stealth[length=2mm,width=1.6mm]}-{Stealth[length=2mm,width=1.6mm]},
+              line width=0.6pt, rounded corners=3pt},
+  flbl/.style={font=\scriptsize, inner sep=2pt, fill=white},
+  cZig/.style={fill=red!8},   cGw/.style={fill=orange!12},  cCloud/.style={fill=blue!8},
+  cMob/.style={fill=green!10}, cInfra/.style={fill=black!8}, cQueue/.style={fill=yellow!20},
+  cWarn/.style={fill=red!12},  cFut/.style={fill=orange!16},
+}
 
 % Lists - support a), b), c) at deep levels
 \usepackage{enumitem}
