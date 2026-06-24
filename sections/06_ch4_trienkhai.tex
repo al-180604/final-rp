@@ -49,21 +49,21 @@ Hình \ref{fig:ch4-learning-to-product} minh họa rõ nét ranh giới và các
 \label{sec:ch4-implementation-env}
 
 Hệ thống được tổ chức thành các thư mục mã nguồn riêng biệt, phân tách rõ ràng trách nhiệm của từng thành phần trong giải pháp đa lớp. Môi trường triển khai thực tế sử dụng các công nghệ hiện đại, phù hợp với năng lực xử lý của từng thiết bị. Bảng \ref{tab:ch4-source-map} tóm tắt các thành phần chính trong mã nguồn cùng công nghệ và vai trò tương ứng của chúng.
-
+q
 \begin{table}[H]
 \centering
-\caption{Môi trường công nghệ và bản đồ mã nguồn triển khai}
+\caption{Môi trường công nghệ triển khai các thành phần hệ thống}
 \label{tab:ch4-source-map}
 {\footnotesize
-\begin{tabular}{|p{2.8cm}|p{4.2cm}|p{7.5cm}|}
+\begin{tabular}{|p{4.5cm}|p{10.0cm}|}
 \hline
-\textbf{Thành phần} & \textbf{Công nghệ / Vai trò} & \textbf{Evidence trong mã nguồn} \\ \hline
-Firmware Zigbee & Silicon Labs Gecko SDK v4.5.0, EmberZNet, nạp qua Simplicity Commander & \path|artifact/ncp-uart-hw/|, \path|artifact/Z3Light/|, \path|artifact/Z3Switch/|, \path|end_devices/Z3_Occupancy_Sensor/| \\ \hline
-Gateway Edge & Native C, libmosquitto, EZSP/ASH qua kết nối serial UART & \path|gateway/Z3GatewayHost/app/app_mqtt.c|, \path|cmd_handler.c|, \path|device_dispatch.c|, \path|light_ctrl.c|, \path|device_registry.c| \\ \hline
-Cloud Backend & Python, FastAPI 0.115.6, SQLAlchemy async, Paho MQTT & \path|cloud/app/main.py|, \path|models.py|, \path|mqtt_client.py|, \path|command_timeout.py|, \path|routers/| \\ \hline
-Database & PostgreSQL 16, quản lý cấu trúc dạng quan hệ và các trường JSON mở rộng & \path|deploy/docker-compose.prod.yml|, \path|cloud/app/models.py| \\ \hline
-Mobile App & Flutter SDK, Dart, quản lý trạng thái bằng thư viện Provider & \path|mobile_app/lib/data/services/api_client.dart|, \path|mobile_app/lib/data/repositories/|, \path|mobile_app/lib/ui/| \\ \hline
-Deployment & Docker Compose, shell script chạy trên máy chủ AWS EC2 Ubuntu 22.04 LTS & \path|deploy/docker-compose.prod.yml|, \path|deploy/deploy.ps1|, \path|deploy/ec2-setup.ps1| \\ \hline
+\textbf{Thành phần} & \textbf{Công nghệ / Vai trò} \\ \hline
+Firmware Zigbee & Silicon Labs Gecko SDK v4.5.0, EmberZNet, nạp qua Simplicity Commander \\ \hline
+Gateway Edge & Native C, libmosquitto, EZSP/ASH qua kết nối serial UART \\ \hline
+Cloud Backend & Python, FastAPI 0.115.6, SQLAlchemy async, Paho MQTT \\ \hline
+Database & PostgreSQL 16, quản lý cấu trúc dạng quan hệ và các trường JSON mở rộng \\ \hline
+Mobile App & Flutter SDK, Dart, quản lý trạng thái bằng thư viện Provider \\ \hline
+Deployment & Docker Compose, shell script chạy trên máy chủ AWS EC2 Ubuntu 22.04 LTS \\ \hline
 \end{tabular}
 }
 \end{table}
@@ -367,6 +367,99 @@ UI Features & \path|lib/ui/features/*| & Thiết kế giao diện hiển thị d
 \end{table}
 
 Bảng \ref{tab:ch4-mobile-map} cung cấp cái nhìn chi tiết về cách phân bổ các file mã nguồn của ứng dụng Mobile, củng cố tính chặt chẽ trong triển khai phần mềm phía máy khách.
+
+\subsection{Ảnh giao diện sản phẩm theo từng chức năng}
+\label{subsec:ch4-mobile-screens}
+
+Các ảnh chụp màn hình trong mục này thể hiện lớp giao diện sản phẩm của Mobile App sau khi được triển khai. Mỗi nhóm ảnh được đặt theo chức năng người dùng nhìn thấy trực tiếp, tương ứng với các thư mục UI Feature trong mã nguồn Flutter.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=0.82\linewidth]{Images/login_screen_crop_top.jpg}\\
+        \footnotesize (a) Màn hình đăng nhập
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=0.82\linewidth]{Images/home_screen_crop_top.jpg}\\
+        \footnotesize (b) Màn hình tổng quan hệ thống
+    \end{minipage}
+    \caption{Giao diện xác thực người dùng và màn hình tổng quan của Mobile App.}
+    \label{fig:ch4-mobile-auth-home}
+\end{figure}
+
+Hình \ref{fig:ch4-mobile-auth-home} cho thấy luồng vào ứng dụng và màn hình chính. Sau khi đăng nhập, người dùng nhìn thấy trạng thái Home Hub, số lượng thiết bị, trạng thái trực tuyến, dữ liệu môi trường và các đèn có thể thao tác nhanh.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=0.82\linewidth]{Images/device_list_crop_top.jpg}\\
+        \footnotesize (a) Danh sách thiết bị
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.44\textwidth}
+        \centering
+        \includegraphics[width=0.82\linewidth]{Images/provisioning_screen_crop_top.jpg}\\
+        \footnotesize (b) Provisioning thiết bị mới
+    \end{minipage}
+    \caption{Giao diện quản lý thiết bị và thêm thiết bị Zigbee vào hệ thống.}
+    \label{fig:ch4-mobile-devices-provisioning}
+\end{figure}
+
+Hình \ref{fig:ch4-mobile-devices-provisioning} minh họa hai thao tác vận hành thường gặp. Màn hình danh sách thiết bị hỗ trợ quan sát trạng thái, phòng đặt thiết bị và bộ lọc theo loại thiết bị. Màn hình Provisioning phục vụ quá trình tạo phiên thêm thiết bị, quét QR hoặc nhập thông tin thủ công, sau đó gán thiết bị vào phòng tương ứng.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/rule_list_crop_top.jpg}\\
+        \footnotesize (a) Danh sách rule
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/rule_create_trigger_crop_top.jpg}\\
+        \footnotesize (b) Chọn trigger
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/rule_create_schedule_crop_top.jpg}\\
+        \footnotesize (c) Tạo schedule rule
+    \end{minipage}
+    \caption{Giao diện quản lý và tạo luật tự động hóa trong Mobile App.}
+    \label{fig:ch4-mobile-automation}
+\end{figure}
+
+Hình \ref{fig:ch4-mobile-automation} mô tả phần Automation Rule. Người dùng có thể xem danh sách luật, bật hoặc tắt luật hiện có, tạo luật mới từ trigger theo thiết bị hoặc theo lịch chạy, sau đó lưu cấu hình lên Cloud Backend để đồng bộ với hệ thống.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/settings_screen_crop_top.jpg}\\
+        \footnotesize (a) Cài đặt hệ thống
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/language_mode_crop_top.jpg}\\
+        \footnotesize (b) Chọn ngôn ngữ
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.31\textwidth}
+        \centering
+        \includegraphics[width=0.92\linewidth]{Images/lightmode_home_screen_crop_top.jpg}\\
+        \footnotesize (c) Giao diện sáng
+    \end{minipage}
+    \caption{Giao diện cài đặt, ngôn ngữ và chế độ hiển thị của Mobile App.}
+    \label{fig:ch4-mobile-settings}
+\end{figure}
+
+Hình \ref{fig:ch4-mobile-settings} cho thấy phần cấu hình phía người dùng, bao gồm tài khoản, cấu hình kết nối Cloud, tham số polling, thời gian timeout lệnh, lựa chọn ngôn ngữ và chế độ hiển thị. Nhóm màn hình này giúp ứng dụng dễ dùng hơn trong quá trình demo, đồng thời tách các tham số vận hành khỏi mã nguồn.
 
 % ========================================
 % 4.7 TRIỂN KHAI MÔI TRƯỜNG CHẠY THỰC TẾ
