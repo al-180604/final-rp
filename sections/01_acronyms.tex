@@ -9,7 +9,7 @@
 \vspace{0.5cm}
 
 \small
-\begin{longtable}{|l|l|}
+\begin{longtable}{|l|p{12cm}|}
 \hline
 \textbf{Viết tắt} & \textbf{Ý nghĩa} \\ \hline
 \endfirsthead
@@ -18,68 +18,108 @@
 \endhead
 \hline
 \endfoot
-ACK & Acknowledgement \\ \hline
-AES & Advanced Encryption Standard \\ \hline
-API & Application Programming Interface \\ \hline
-APS & Application Support Sub-layer \\ \hline
-CID & Correlation ID \\ \hline
-CLI & Command Line Interface \\ \hline
-CMD & Command \\ \hline
-CMSIS & Cortex Microcontroller Software Interface Standard \\ \hline
-CRLF & Carriage Return Line Feed \\ \hline
-CSA & Connectivity Standards Alliance \\ \hline
-CSMA/CA & Carrier Sense Multiple Access with Collision Avoidance \\ \hline
-DMA & Direct Memory Access \\ \hline
-EZSP & EmberZNet Serial Protocol \\ \hline
-FFD & Full Function Device \\ \hline
-GBL & Gecko Bootloader \\ \hline
-GPIO & General Purpose Input/Output \\ \hline
-GSDK & Gecko SDK \\ \hline
-GUI & Graphical User Interface \\ \hline
-HTTP & Hypertext Transfer Protocol \\ \hline
-I2C & Inter-Integrated Circuit \\ \hline
-IDE & Integrated Development Environment \\ \hline
-IoT & Internet of Things \\ \hline
-JSON & JavaScript Object Notation \\ \hline
-LCD & Liquid Crystal Display \\ \hline
-LED & Light Emitting Diode \\ \hline
-LQI & Link Quality Indicator \\ \hline
-LWT & Last Will and Testament (MQTT) \\ \hline
-MAC & Media Access Control \\ \hline
-MCU & Microcontroller Unit \\ \hline
-MQTT & Message Queuing Telemetry Transport \\ \hline
-NCP & Network Co-Processor \\ \hline
-NVM3 & Non-Volatile Memory 3rd Generation \\ \hline
-NWK & Network Layer \\ \hline
-OTA & Over-the-Air \\ \hline
-PAN & Personal Area Network \\ \hline
-PHY & Physical Layer \\ \hline
-PSA & Platform Security Architecture \\ \hline
-PTI & Packet Trace Interface \\ \hline
-QoS & Quality of Service \\ \hline
-RAIL & Radio Abstraction Interface Layer \\ \hline
-RBAC & Role-Based Access Control \\ \hline
-REST & Representational State Transfer \\ \hline
-RF & Radio Frequency \\ \hline
-RFD & Reduced Function Device \\ \hline
-RPi & Raspberry Pi \\ \hline
-RTOS & Real-Time Operating System \\ \hline
-SDK & Software Development Kit \\ \hline
-SED & Sleepy End Device \\ \hline
-SoC & System on Chip \\ \hline
-SPI & Serial Peripheral Interface \\ \hline
-SSv5 & Simplicity Studio version 5 \\ \hline
-TCP/IP & Transmission Control Protocol / Internet Protocol \\ \hline
-TLS & Transport Layer Security \\ \hline
-UART & Universal Asynchronous Receiver-Transmitter \\ \hline
-USB & Universal Serial Bus \\ \hline
-VCOM & Virtual COM Port \\ \hline
-WSTK & Wireless Starter Kit \\ \hline
-ZC & Zigbee Coordinator \\ \hline
-ZCL & Zigbee Cluster Library \\ \hline
-ZDO & Zigbee Device Object \\ \hline
-ZED & Zigbee End Device \\ \hline
-ZR & Zigbee Router \\ \hline
+ACK & Acknowledgement (Bản tin xác nhận) \\ \hline
+ACL & Access Control List (Danh sách kiểm soát truy cập) \\ \hline
+AES & Advanced Encryption Standard (Tiêu chuẩn mã hóa nâng cao) \\ \hline
+AF & Application Framework (Khung ứng dụng) \\ \hline
+API & Application Programming Interface (Giao diện lập trình ứng dụng) \\ \hline
+APS & Application Support Sub-layer (Phân lớp hỗ trợ ứng dụng trong Zigbee) \\ \hline
+ASH & Asynchronous Serial Host (Giao thức kết nối Host - NCP không đồng bộ) \\ \hline
+AWS & Amazon Web Services (Dịch vụ điện toán đám mây Amazon) \\ \hline
+BLE & Bluetooth Low Energy (Công nghệ truyền thông Bluetooth năng lượng thấp) \\ \hline
+CA & Certificate Authority (Tổ chức cấp phát chứng chỉ số) \\ \hline
+CID & Correlation ID (Mã định danh liên kết) \\ \hline
+CLI & Command Line Interface (Giao diện dòng lệnh) \\ \hline
+CMD & Command (Lệnh điều khiển) \\ \hline
+CMSIS & Cortex Microcontroller Software Interface Standard (Tiêu chuẩn giao tiếp phần mềm vi điều khiển Cortex) \\ \hline
+CPU & Central Processing Unit (Bộ vi xử lý trung tâm) \\ \hline
+CRC & Cyclic Redundancy Check (Mã kiểm tra thặng dư chu kỳ) \\ \hline
+CRLF & Carriage Return Line Feed (Ký tự xuống dòng) \\ \hline
+CRUD & Create, Read, Update, Delete (Các thao tác dữ liệu: Thêm, Đọc, Sửa, Xóa) \\ \hline
+CSA & Connectivity Standards Alliance (Liên minh Tiêu chuẩn Kết nối) \\ \hline
+CSDL & Cơ sở dữ liệu \\ \hline
+CSMA/CA & Carrier Sense Multiple Access with Collision Avoidance (Đa truy cập nhận biết sóng mang tránh va chạm) \\ \hline
+CTS & Clear To Send (Tín hiệu sẵn sàng nhận trong truyền thông nối tiếp) \\ \hline
+DB & Database (Cơ sở dữ liệu) \\ \hline
+DHT11 & Cảm biến nhiệt độ và độ ẩm kỹ thuật số tích hợp \\ \hline
+DMA & Direct Memory Access (Truy cập bộ nhớ trực tiếp) \\ \hline
+E2E & End-to-End (Toàn trình / Từ đầu cuối đến đầu cuối) \\ \hline
+EC2 & Elastic Compute Cloud (Dịch vụ máy chủ ảo đám mây của AWS) \\ \hline
+EUI / EUI64 & Extended Unique Identifier (Định danh mở rộng duy nhất 64-bit của thiết bị Zigbee) \\ \hline
+EZSP & EmberZNet Serial Protocol (Giao thức truyền thông nối tiếp EmberZNet) \\ \hline
+FFD & Full Function Device (Thiết bị đầy đủ chức năng trong mạng Zigbee) \\ \hline
+GBL & Gecko Bootloader (Tệp tin phân phối firmware dạng bootloader của Silicon Labs) \\ \hline
+GPIO & General Purpose Input/Output (Cổng vào ra chung) \\ \hline
+GSDK & Gecko SDK (Bộ phát triển phần mềm Gecko) \\ \hline
+GUI & Graphical User Interface (Giao diện người dùng đồ họa) \\ \hline
+HTTP & Hypertext Transfer Protocol (Giao thức truyền tải siêu văn bản) \\ \hline
+HTTPS & Hypertext Transfer Protocol Secure (Giao thức truyền tải siêu văn bản bảo mật) \\ \hline
+I2C & Inter-Integrated Circuit (Giao thức truyền thông nối tiếp giữa các vi mạch) \\ \hline
+IC & Install Code (Mã cài đặt bảo mật thiết bị trong Zigbee) \\ \hline
+ID & Identifier (Mã định danh) \\ \hline
+IDE & Integrated Development Environment (Môi trường phát triển tích hợp) \\ \hline
+IEEE & Institute of Electrical and Electronics Engineers (Viện kỹ sư Điện và Điện tử) \\ \hline
+IP & Internet Protocol (Giao thức Internet) \\ \hline
+IPC & Inter-Process Communication (Truyền thông giữa các tiến trình) \\ \hline
+IoT & Internet of Things (Mạng lưới vạn vật kết nối Internet) \\ \hline
+JSON & JavaScript Object Notation (Định dạng trao đổi dữ liệu dạng văn bản nhẹ) \\ \hline
+JWT & JSON Web Token (Mã xác thực dạng chuỗi ký tự JSON mã hóa) \\ \hline
+LCD & Liquid Crystal Display (Màn hình tinh thể lỏng) \\ \hline
+LED & Light Emitting Diode (Điốt phát quang) \\ \hline
+LQI & Link Quality Indicator (Chỉ số chất lượng liên kết vật lý) \\ \hline
+LWT & Last Will and Testament (Cơ chế di chúc trong MQTT) \\ \hline
+MAC & Media Access Control (Phân lớp điều khiển truy cập môi trường truyền dẫn) \\ \hline
+MCU & Microcontroller Unit (Khối vi điều khiển) \\ \hline
+MQTT & Message Queuing Telemetry Transport (Giao thức truyền tải tin nhắn dạng publish/subscribe) \\ \hline
+NAK & Negative Acknowledgement (Bản tin báo nhận lỗi truyền tin) \\ \hline
+NCP & Network Co-Processor (Bộ vi xử lý mạng phụ trợ) \\ \hline
+NVM3 & Non-Volatile Memory 3rd Generation (Hệ thống lưu trữ bộ nhớ không bay hơi thế hệ thứ 3 của Silicon Labs) \\ \hline
+NWK & Network Layer (Lớp mạng trong mô hình Zigbee) \\ \hline
+ORM & Object-Relational Mapping (Ánh xạ quan hệ - đối tượng) \\ \hline
+OS & Operating System (Hệ điều hành) \\ \hline
+OTA & Over-the-Air (Công nghệ nâng cấp firmware không dây) \\ \hline
+PAN & Personal Area Network (Mạng khu vực cá nhân) \\ \hline
+PHY & Physical Layer (Lớp vật lý) \\ \hline
+PIR & Passive Infrared Sensor (Cảm biến hồng ngoại thụ động) \\ \hline
+PSA & Platform Security Architecture (Kiến trúc bảo mật nền tảng) \\ \hline
+PTI & Packet Trace Interface (Giao diện giám sát gói tin phần cứng) \\ \hline
+QoS & Quality of Service (Chất lượng dịch vụ trong truyền tin) \\ \hline
+RAIL & Radio Abstraction Interface Layer (Lớp giao diện trừu tượng hóa sóng vô tuyến của Silicon Labs) \\ \hline
+RAM & Random Access Memory (Bộ nhớ truy cập ngẫu nhiên) \\ \hline
+RBAC & Role-Based Access Control (Kiểm soát truy cập dựa trên vai trò) \\ \hline
+REST & Representational State Transfer (Kiểu kiến trúc truyền trạng thái đại diện để thiết kế API Web) \\ \hline
+RF & Radio Frequency (Tần số sóng vô tuyến) \\ \hline
+RFD & Reduced Function Device (Thiết bị giảm thiểu chức năng trong mạng Zigbee) \\ \hline
+RPi & Raspberry Pi (Máy tính nhúng bo mạch đơn phổ biến) \\ \hline
+RTOS & Real-Time Operating System (Hệ điều hành thời gian thực) \\ \hline
+RTS & Request To Send (Tín hiệu yêu cầu gửi dữ liệu trong UART) \\ \hline
+RX & Receive (Tín hiệu nhận dữ liệu nối tiếp) \\ \hline
+SDK & Software Development Kit (Bộ công cụ phát triển phần mềm) \\ \hline
+SED & Sleepy End Device (Thiết bị đầu cuối Zigbee chế độ ngủ tiết kiệm pin) \\ \hline
+SHA256 & Secure Hash Algorithm 256-bit (Thuật toán băm bảo mật 256-bit) \\ \hline
+SoC & System on Chip (Hệ thống trên một vi mạch) \\ \hline
+SPI & Serial Peripheral Interface (Giao thức giao tiếp ngoại vi nối tiếp đồng bộ) \\ \hline
+SSE & Server-Sent Events (Công nghệ đẩy dữ liệu một chiều từ máy chủ xuống trình duyệt) \\ \hline
+SSv5 & Simplicity Studio version 5 (Môi trường phát triển phần mềm của Silicon Labs phiên bản 5) \\ \hline
+TCP & Transmission Control Protocol (Giao thức điều khiển truyền vận) \\ \hline
+TCP/IP & Transmission Control Protocol / Internet Protocol (Bộ giao thức truyền thông Internet) \\ \hline
+TLS & Transport Layer Security (Bảo mật tầng truyền tải) \\ \hline
+TX & Transmit (Tín hiệu truyền dữ liệu nối tiếp) \\ \hline
+UART & Universal Asynchronous Receiver-Transmitter (Bộ truyền nhận nối tiếp không đồng bộ) \\ \hline
+UI & User Interface (Giao diện người dùng) \\ \hline
+USB & Universal Serial Bus (Chuẩn giao tiếp bus nối tiếp vạn năng) \\ \hline
+UUID & Universally Unique Identifier (Mã định danh duy nhất toàn cầu) \\ \hline
+UX & User Experience (Trải nghiệm người dùng) \\ \hline
+VCOM & Virtual COM Port (Cổng COM ảo) \\ \hline
+WSTK & Wireless Starter Kit (Bộ kit phát triển phần cứng không dây của Silicon Labs) \\ \hline
+XOFF & Transmitter Off (Ký tự báo ngừng truyền dữ liệu trong điều khiển luồng phần mềm) \\ \hline
+XON & Transmitter On (Ký tự báo tiếp tục truyền dữ liệu trong điều khiển luồng phần mềm) \\ \hline
+XOR & Exclusive OR (Phép toán logic OR loại trừ) \\ \hline
+ZC & Zigbee Coordinator (Thiết bị điều phối mạng Zigbee) \\ \hline
+ZCL & Zigbee Cluster Library (Thư viện tập hợp các thuộc tính và lệnh chuẩn của Zigbee) \\ \hline
+ZDO & Zigbee Device Object (Đối tượng thiết bị quản lý cấu hình lớp mạng Zigbee) \\ \hline
+ZED & Zigbee End Device (Thiết bị đầu cuối mạng Zigbee) \\ \hline
+ZR & Zigbee Router (Thiết bị định tuyến mạng Zigbee) \\ \hline
 \end{longtable}
 \normalsize
 

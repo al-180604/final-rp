@@ -19,7 +19,7 @@ Quá trình triển khai hệ thống trong đề tài đồ án tốt nghiệp 
 
 Định hướng triển khai của đồ án tuân theo mô hình kết hợp Hybrid "Learning to Product". Mô hình này chia quá trình xây dựng hệ thống thành hai khía cạnh song hành:
 \begin{itemize}
-    \item \textbf{Khía cạnh học tập (Learning):} Giúp nghiên cứu sâu về các cơ chế cơ bản của giao thức Zigbee bao gồm cách Coordinator tạo lập mạng, cơ chế tham gia mạng (join/commissioning) của các Router/End Device, các tập lệnh chuẩn của thư viện Zigbee Cluster Library (ZCL), và việc truyền nhận trạng thái (attribute report) hay sự kiện (event) ở mức mạng cục bộ.
+    \item \textbf{Khía cạnh học tập (Learning):} Giúp nghiên cứu sâu về các cơ chế cơ bản của giao thức Zigbee bao gồm cách Coordinator tạo lập mạng, cơ chế tham gia mạng (join/commissioning) của các Router, các tập lệnh chuẩn của thư viện Zigbee Cluster Library (ZCL), và việc truyền nhận trạng thái (attribute report) hay sự kiện (event) ở mức mạng cục bộ.
     \item \textbf{Khía cạnh sản phẩm (Product):} Định hướng thiết kế và đóng gói hệ thống tiệm cận với cấu trúc của một sản phẩm thương mại. Điều này được thể hiện qua việc tối ưu hóa hiệu năng Gateway (viết bằng ngôn ngữ native C giúp tiết kiệm tài nguyên hệ thống nhúng), tổ chức Cloud Backend theo mô hình REST API chuẩn hóa kèm theo hàng đợi xử lý lệnh không đồng bộ qua MQTT broker, quản lý trạng thái và dữ liệu sự kiện qua hệ quản trị cơ sở dữ liệu PostgreSQL, cung cấp giao diện quản trị trực quan trên Mobile App và tự động hóa quy trình triển khai bằng công cụ Docker Compose trên nền tảng điện toán đám mây.
 \end{itemize}
 
@@ -27,14 +27,15 @@ Thông qua việc phân định rõ hai trục này, hệ thống vừa đóng v
 
 \begin{figure}[H]
     \centering
-    \begin{tikzpicture}[font=\footnotesize, >=Stealth]
-        \node[fblk, cCloud, minimum width=3.8cm, minimum height=1.5cm] (local) at (0,0) {\textbf{Mạng Zigbee Cục bộ}\\\textit{(Learning Layer)}\\Coordinator (NCP), Routers,\\Attributes \& ZCL Commands};
-        \node[fblk, cGw, minimum width=3.6cm, minimum height=1.5cm] (edge) at (5.6,0) {\textbf{Gateway Edge (Native C)}\\\textit{(Translation Layer)}\\MQTT-to-Zigbee Bridge,\\Command Queue \& Registry};
-        \node[fblk, cMob, minimum width=3.6cm, minimum height=1.5cm] (cloud) at (11.2,0) {\textbf{Cloud \& Mobile UX}\\\textit{(Product Layer)}\\FastAPI, PostgreSQL DB,\\REST APIs, Flutter UI};
-        \draw[farr] (local) -- node[flbl, above] {EZSP / ASH} (edge);
-        \draw[farr] (edge) -- node[flbl, above] {MQTT Telemetry} (cloud);
-        \draw[farr] (cloud.south) -- ++(0,-0.7) -| (edge.south);
-        \node[flbl, below] at (8.4,-1.45) {REST / MQTT Commands};
+    \begin{tikzpicture}[font=\scriptsize, >=Stealth]
+        \tikzset{lbl/.style={font=\fontsize{6.5}{7.5}\selectfont, fill=white, inner sep=1.5pt}}
+        \node[fblk, cCloud, font=\scriptsize, minimum width=3.6cm, minimum height=1.35cm] (local) at (0,0) {\textbf{Mạng Zigbee Cục bộ}\\\textit{(Lớp học tập)}\\Coordinator (NCP), Routers,\\Thuộc tính \& lệnh ZCL};
+        \node[fblk, cGw, font=\scriptsize, minimum width=3.4cm, minimum height=1.35cm] (edge) at (5.4,0) {\textbf{Gateway Edge (Native C)}\\\textit{(Lớp biên dịch)}\\Cầu nối MQTT--Zigbee,\\Hàng đợi lệnh \& Registry};
+        \node[fblk, cMob, font=\scriptsize, minimum width=3.6cm, minimum height=1.35cm] (cloud) at (10.8,0) {\textbf{Cloud \& Mobile UX}\\\textit{(Lớp sản phẩm)}\\FastAPI, PostgreSQL DB,\\REST API, Giao diện Flutter};
+        \draw[farr] (local) -- node[lbl, above] {EZSP / ASH} (edge);
+        \draw[farr] (edge) -- node[lbl, above] {MQTT Telemetry} (cloud);
+        \draw[farr] (cloud.south) -- ++(0,-0.6) -| (edge.south);
+        \node[lbl, below] at (8.1,-1.3) {Lệnh REST / MQTT};
     \end{tikzpicture}
     \caption{Định hướng triển khai tích hợp giữa nghiên cứu mạng Zigbee và giải pháp sản phẩm IoT.}
     \label{fig:ch4-learning-to-product}
@@ -103,29 +104,31 @@ Thiết bị công tắc Z3Switch cũng được triển khai ở vai trò Zigbe
 \subsection{Triển khai cảm biến hiện diện (Motion/Occupancy Sensor)}
 \label{sec:ch4-occupancy-firmware}
 
-Cảm biến hiện diện được mô hình hóa trong hệ thống bằng loại thiết bị \texttt{motion}. Project nguồn của thiết bị này sử dụng tệp cấu hình Zigbee Cluster Library \path|end_devices/Z3_Occupancy_Sensor/config/zcl/zcl_config.zap|, hỗ trợ \texttt{Occupancy Sensing Cluster} (Cluster ID \texttt{0x0406}). Cảm biến báo cáo giá trị \texttt{occupied} (có người) hoặc \texttt{unoccupied} (không có người) dựa trên cảm biến hồng ngoại thụ động PIR. 
+Cảm biến hiện diện được triển khai dưới vai trò Zigbee Router (loại thiết bị \texttt{motion}), vừa phát hiện chuyển động vừa tham gia định tuyến gói tin trong mạng mesh. Firmware của thiết bị sử dụng tệp cấu hình Zigbee Cluster Library \path|end_devices/Z3_Occupancy_Sensor/config/zcl/zcl_config.zap| và bật \texttt{Occupancy Sensing Cluster} (Cluster ID \texttt{0x0406}). Dựa trên cảm biến hồng ngoại thụ động PIR gắn trên chân GPIO, thiết bị đọc trạng thái theo chu kỳ và báo cáo giá trị \texttt{occupied} (có người) hoặc \texttt{unoccupied} (không có người) về Coordinator thông qua bản tin attribute report.
 
-Cần lưu ý rằng trong cấu trúc thư mục hiện tại của dự án, chưa có tệp artifact binary hoàn chỉnh cho cảm biến chuyển động trong thư mục \path|artifact/|. Do đó, phần này được ghi nhận ở mức triển khai cấu hình mã nguồn và khai báo logic giao tiếp, còn việc đánh giá hiệu năng chạy thực tế của cảm biến sẽ được trình bày trong Chương 5.
+Artifact binary và manifest cấu hình của cảm biến được quản lý hoàn chỉnh tại \path|artifact/Z3_Occupancy_Sensor/manifest.json|, tương tự các thiết bị Router khác trong hệ thống. Kết quả gia nhập mạng và vận hành thực tế của cảm biến được trình bày chi tiết trong Chương 5.
 
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
         \tikzset{ndc/.style={draw, circle, align=center, minimum size=1.95cm, line width=0.5pt, font=\scriptsize, inner sep=1pt}}
+        \node[fblk, cGw, minimum width=2.4cm, minimum height=1.3cm] (gw) at (-4.2,0) {Gateway\\(Host Linux)};
         \node[ndc, cZig] (ncp) at (0,0) {NCP\\Coordinator};
         \node[ndc, cCloud] (light) at (4.3,1.9) {Z3Light\\Router};
         \node[ndc, cCloud] (switch) at (4.3,-1.9) {Z3Switch\\Router};
-        \node[ndc, cMob] (sensor) at (8.6,0) {Motion\\Sensor\\(End Device)};
-        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, above, sloped] {EZSP / UART} (light);
-        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, below, sloped] {EZSP / UART} (switch);
-        \draw[<->, line width=0.6pt] (ncp) -- node[flbl, above, sloped] {EZSP / UART} (sensor);
-        \draw[<->, line width=0.6pt, dashed] (light) -- node[flbl, right] {Mesh Link} (switch);
-        \draw[<->, line width=0.6pt, dashed] (light) -- node[flbl, above, sloped] {Mesh Link} (sensor);
+        \node[ndc, cCloud] (sensor) at (8.6,0) {Cảm biến\\chuyển động\\(Router)};
+        \draw[<->, line width=0.7pt] (gw) -- node[flbl, above] {EZSP / UART} (ncp);
+        \draw[<->, line width=0.6pt, dashed] (ncp) -- node[flbl, above, sloped] {Liên kết mesh} (light);
+        \draw[<->, line width=0.6pt, dashed] (ncp) -- (switch);
+        \draw[<->, line width=0.6pt, dashed] (ncp) -- (sensor);
+        \draw[<->, line width=0.6pt, dashed] (light) -- (switch);
+        \draw[<->, line width=0.6pt, dashed] (light) -- node[flbl, above, sloped] {Liên kết mesh} (sensor);
     \end{tikzpicture}
     \caption{Sơ đồ cấu trúc topo mạng Zigbee mesh được xây dựng trong đồ án.}
     \label{fig:ch4-zigbee-topology}
 \end{figure}
 
-Sơ đồ topo mạng Zigbee mesh ở Hình \ref{fig:ch4-zigbee-topology} thể hiện sự kết nối giữa các node thiết bị vật lý. Các đường nét đứt đại diện cho liên kết định tuyến tự động giữa các Router với nhau và với End Device, tạo nên khả năng tự phục hồi mạng khi một node Router gặp sự cố mất điện đột ngột.
+Sơ đồ topo mạng Zigbee mesh ở Hình \ref{fig:ch4-zigbee-topology} thể hiện sự kết nối giữa các node thiết bị vật lý. Các đường nét đứt đại diện cho liên kết định tuyến tự động giữa các Router với nhau, tạo nên khả năng tự phục hồi mạng khi một node Router gặp sự cố mất điện đột ngột.
 
 \begin{table}[H]
 \centering
@@ -138,7 +141,7 @@ Sơ đồ topo mạng Zigbee mesh ở Hình \ref{fig:ch4-zigbee-topology} thể 
 NCP Coordinator & Coordinator & \path|artifact/ncp-uart-hw/manifest.json| & Cấu hình kênh vô tuyến, PAN ID mạng và EZSP UART driver. \\ \hline
 Z3Light & Router & \path|artifact/Z3Light/manifest.json| & Cluster \texttt{On/Off} và \texttt{Level Control}, xử lý lệnh thay đổi đèn. \\ \hline
 Z3Switch & Router & \path|artifact/Z3Switch/manifest.json| & Bắt sự kiện button nhấn vật lý và phát bản tin ZCL toggle. \\ \hline
-Motion Sensor & End Device & \path|.../zcl_config.zap| & Đọc cảm biến PIR, truyền bản tin thay đổi trạng thái hiện diện. \\ \hline
+Motion Sensor & Router & \path|artifact/Z3_Occupancy_Sensor/manifest.json| & Đọc cảm biến PIR, truyền bản tin thay đổi trạng thái hiện diện. \\ \hline
 \end{tabular}
 \end{table}
 
@@ -178,16 +181,19 @@ Về mặt tự động hóa tại biên, mã nguồn Gateway có tích hợp mo
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
         \node[fblk, cInfra, minimum width=2.5cm] (broker)  at (0,0)   {Mosquitto\\Broker};
         \node[fblk, cGw,    minimum width=2.5cm] (mqtt)    at (3.3,0) {app\_mqtt.c\\(MQTT Client)};
-        \node[fblk, cQueue, minimum width=2.5cm] (queue)   at (6.6,0) {Command Queue\\(Ring Buffer)};
-        \node[fblk, cGw,    minimum width=2.5cm] (handler) at (9.9,0) {cmd\_handler.c\\(Parser)};
-        \node[fblk, cGw,    minimum width=2.5cm] (dispatch) at (9.9,-2.0) {device\_dispatch.c\\(Dispatcher)};
-        \node[fblk, cGw, minimum width=2.5cm] (ctrl) at (6.6,-4.0) {light\_ctrl.c\\(Actuator Ctrl)};
-        \node[fblk, cGw, minimum width=2.5cm] (reg)  at (9.9,-4.0) {device\_registry.c\\(Local Registry)};
-        \node[fblk, cGw, minimum width=2.5cm] (rule) at (13.2,-4.0) {rule\_engine.c\\(Local Rules)};
-        \draw[fbi]  (broker) -- node[flbl, above] {MQTT} (mqtt);
-        \draw[farr] (mqtt) -- node[flbl, above] {Enqueue} (queue);
-        \draw[farr] (queue) -- node[flbl, above] {Dequeue} (handler);
-        \draw[farr] (handler) -- node[flbl, right] {Dispatch} (dispatch);
+        \node[fblk, cQueue, minimum width=2.5cm] (queue)   at (6.6,0) {Hàng đợi lệnh\\(Ring Buffer)};
+        \node[fblk, cGw,    minimum width=2.5cm] (handler) at (9.9,0) {cmd\_handler.c\\(Bộ phân tích)};
+        \node[fblk, cGw,    minimum width=2.5cm] (dispatch) at (9.9,-2.0) {device\_dispatch.c\\(Bộ điều phối)};
+        \node[fblk, cGw, minimum width=2.5cm] (ctrl) at (6.6,-4.0) {light\_ctrl.c\\(Điều khiển đèn)};
+        \node[fblk, cGw, minimum width=2.5cm] (reg)  at (9.9,-4.0) {device\_registry.c\\(Registry cục bộ)};
+        \node[fblk, cGw, minimum width=2.5cm] (rule) at (13.2,-4.0) {rule\_engine.c\\(Luật cục bộ)};
+        \draw[fbi]  (broker) -- (mqtt);
+        \draw[farr] (mqtt) -- (queue);
+        \draw[farr] (queue) -- (handler);
+        \node[flbl] at (1.65,0.72) {MQTT};
+        \node[flbl] at (4.95,0.72) {Nạp lệnh};
+        \node[flbl] at (8.25,0.72) {Lấy lệnh};
+        \draw[farr] (handler) -- node[flbl, right] {Điều phối} (dispatch);
         \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (ctrl.north);
         \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (reg.north);
         \draw[farr] (dispatch.south) -- ++(0,-0.6) -| (rule.north);
@@ -277,18 +283,18 @@ Tiến trình timeout worker chạy độc lập định kỳ (mỗi giây một
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
-        \node[fblk, cCloud, minimum width=3.4cm] (acc)  at (0,0)    {ACCEPTED\\(Created in DB)};
-        \node[fblk, cCloud, minimum width=3.4cm] (que)  at (0,-1.9) {QUEUED\\(Published to MQTT)};
-        \node[fblk, cCloud, minimum width=3.4cm] (sent) at (0,-3.8) {SENT\\(ACK by Gateway)};
-        \node[fblk, cCloud, minimum width=3.4cm] (exec) at (0,-5.7) {EXECUTED\\(ZCL sent by GW)};
-        \node[fblk, cWarn, minimum width=3.4cm] (tmo)  at (5.5,-1.9) {TIMEOUT\\(Expired on DB)};
-        \node[fblk, cWarn, minimum width=3.4cm] (fail) at (5.5,-3.8) {FAILED\\(Error occurred)};
+        \node[fblk, cCloud, minimum width=3.4cm] (acc)  at (0,0)    {ACCEPTED\\(Tạo trong CSDL)};
+        \node[fblk, cCloud, minimum width=3.4cm] (que)  at (0,-1.9) {QUEUED\\(Đã gửi lên MQTT)};
+        \node[fblk, cCloud, minimum width=3.4cm] (sent) at (0,-3.8) {SENT\\(Gateway đã ACK)};
+        \node[fblk, cCloud, minimum width=3.4cm] (exec) at (0,-5.7) {EXECUTED\\(GW đã gửi ZCL)};
+        \node[fblk, cWarn, minimum width=3.4cm] (tmo)  at (5.5,-1.9) {TIMEOUT\\(Hết hạn trên CSDL)};
+        \node[fblk, cWarn, minimum width=3.4cm] (fail) at (5.5,-3.8) {FAILED\\(Có lỗi xảy ra)};
         \draw[farr] (acc)  -- (que);
         \draw[farr] (que)  -- (sent);
         \draw[farr] (sent) -- (exec);
-        \draw[farr] (que)  -- node[flbl, above] {timeout} (tmo);
-        \draw[farr] (sent) -- node[flbl, above] {error} (fail);
-        \draw[farr] (acc.east) -- node[flbl, above, pos=0.12] {error} ++(7.6,0) |- (fail.east);
+        \draw[farr] (que)  -- node[flbl, above] {hết hạn} (tmo);
+        \draw[farr] (sent) -- node[flbl, above] {lỗi} (fail);
+        \draw[farr] (acc.east) -- node[flbl, above, pos=0.12] {lỗi} ++(7.6,0) |- (fail.east);
     \end{tikzpicture}
     \caption{Lược đồ chuyển trạng thái trong vòng đời lệnh điều khiển trên Cloud Backend.}
     \label{fig:ch4-cloud-lifecycle}
@@ -336,7 +342,7 @@ Mã nguồn ứng dụng di động được phân rã thành các lớp chính:
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
         \node[fblk, cMob,   minimum width=5.2cm] (ui)     at (0,0)    {\textbf{UI Features (Views)}\\devices, detail, rules, logs};
-        \node[fblk, cCloud, minimum width=5.2cm] (vm)     at (0,-1.6) {\textbf{View Models (State)}\\Provider / ChangeNotifier};
+        \node[fblk, cCloud, minimum width=5.2cm] (vm)     at (0,-1.6) {\textbf{View Models (Trạng thái)}\\Provider / ChangeNotifier};
         \node[fblk, cQueue, minimum width=5.2cm] (repo)   at (0,-3.2) {\textbf{Repositories}\\remote\_device\_repository.dart};
         \node[fblk, cGw,    minimum width=5.2cm] (client) at (0,-4.8) {\textbf{API Client (HTTP)}\\api\_client.dart};
         \node[fblk, cInfra, minimum width=5.2cm] (cl)     at (0,-6.4) {\textbf{Cloud Backend REST API}};
@@ -481,20 +487,20 @@ Các cấu hình bảo mật được quản lý thông qua tệp tin \path|.env
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
-        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (pg)  at (0,0)   {PostgreSQL DB\\(Internal Port 5432)};
-        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (api) at (4.6,0) {FastAPI Cloud API\\(Exposed Port 8000)};
-        \node[fblk, cInfra, minimum width=3.4cm, minimum height=1.1cm] (mos) at (9.2,0) {Mosquitto Broker\\(Exposed Port 1883)};
-        \node[anchor=west, font=\footnotesize\bfseries] (title) at (-2.0,1.05) {AWS EC2 Server (Ubuntu Linux)};
+        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (pg)  at (0,0)   {PostgreSQL DB\\(Cổng nội bộ 5432)};
+        \node[fblk, cCloud, minimum width=3.4cm, minimum height=1.1cm] (api) at (4.6,0) {FastAPI Cloud API\\(Cổng mở 8000)};
+        \node[fblk, cInfra, minimum width=3.4cm, minimum height=1.1cm] (mos) at (9.2,0) {Mosquitto Broker\\(Cổng mở 1883)};
+        \node[anchor=west, font=\footnotesize\bfseries] (title) at (-2.0,1.05) {Máy chủ AWS EC2 (Ubuntu Linux)};
         \begin{scope}[on background layer]
             \node[draw, rounded corners=3pt, fill=black!4, line width=0.5pt, fit=(pg)(api)(mos)(title), inner sep=5pt] (ec2) {};
         \end{scope}
-        \node[flbl, anchor=south east] at (ec2.south east) {Packaged with Docker Compose};
+        \node[flbl, anchor=north east] at (ec2.north east) {Đóng gói bằng Docker Compose};
         \node[fblk, cGw,  minimum width=3.4cm] (gw)  at (9.2,-3.4) {Gateway Edge\\(Z3GatewayHost C)};
         \node[fblk, cMob, minimum width=3.4cm] (mob) at (4.6,-3.4) {Mobile App\\(Flutter Client)};
         \draw[fbi] (api) -- (pg);
         \draw[fbi] (api) -- (mos);
-        \draw[fbi]  (gw)  -- node[flbl, left] {MQTT (1883)} (mos);
-        \draw[farr] (mob) -- node[flbl, right] {REST HTTPS (8000)} (api);
+        \draw[fbi]  (gw)  -- node[flbl, right] {MQTT (1883)} (mos);
+        \draw[farr] (mob) -- node[flbl, left] {REST HTTPS (8000)} (api);
     \end{tikzpicture}
     \caption{Kiến trúc triển khai và luồng kết nối mạng của các thành phần trên AWS EC2.}
     \label{fig:ch4-deployment-view}
@@ -529,22 +535,23 @@ Sơ đồ mạng triển khai ở Hình \ref{fig:ch4-deployment-view} chỉ rõ 
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
         \tikzset{stp/.style={fblk, minimum width=2.5cm, minimum height=1.0cm}}
-        \node[stp, cMob]   (s1) at (0,0)    {1. Mobile App\\Toggle Action};
+        \node[stp, cMob]   (s1) at (0,0)    {1. Mobile App\\Bật/tắt đèn};
         \node[stp, cCloud] (s2) at (3.1,0)  {2. Cloud API\\HTTP POST};
-        \node[stp, cCloud] (s3) at (6.2,0)  {3. Database\\Store Command};
-        \node[stp, cInfra] (s4) at (9.3,0)  {4. MQTT Broker\\Mosquitto Request};
-        \node[stp, cGw]    (s5) at (12.4,0) {5. Gateway\\app\_mqtt.c Queue};
+        \node[stp, cCloud] (s3) at (6.2,0)  {3. CSDL\\Lưu lệnh};
+        \node[stp, cInfra] (s4) at (9.3,0)  {4. MQTT Broker\\Định tuyến};
+        \node[stp, cGw]    (s5) at (12.4,0) {5. Gateway\\app\_mqtt.c};
         \node[stp, cGw]    (s6)  at (12.4,-2.3) {6. Gateway\\cmd\_handler.c};
         \node[stp, cGw]    (s7)  at (9.3,-2.3)  {7. Gateway\\device\_dispatch.c};
         \node[stp, cGw]    (s8)  at (6.2,-2.3)  {8. Gateway\\light\_ctrl.c};
-        \node[stp, cWarn]  (s9)  at (3.1,-2.3)  {9. Zigbee Light\\Physical Exec};
-        \node[stp, cGw]    (s10) at (0,-2.3)    {10. Gateway\\MQTT Reply};
-        \node[stp, cCloud] (s11) at (0,-4.6)    {11. Cloud API\\Update DB};
-        \node[stp, cMob]   (s12) at (3.1,-4.6)  {12. Mobile App\\Update UI};
+        \node[stp, cWarn]  (s9)  at (3.1,-2.3)  {9. Zigbee Light\\Thực thi};
+        \node[stp, cGw]    (s10) at (0,-2.3)    {10. Gateway\\Phản hồi MQTT};
+        \node[stp, cCloud] (s11) at (0,-4.6)    {11. Cloud API\\Cập nhật CSDL};
+        \node[stp, cMob]   (s12) at (3.1,-4.6)  {12. Mobile App\\Cập nhật UI};
         \draw[farr] (s1) -- (s2);
-        \draw[farr] (s2) -- node[flbl, above] {lưu DB} (s3);
+        \draw[farr] (s2) -- (s3);
+        \node[flbl] at (4.65,0.72) {lưu CSDL};
         \draw[farr] (s2.south) -- ++(0,-0.6) -| (s4.south);
-        \node[flbl, below] at (6.2,-1.1) {publish};
+        \node[flbl, below] at (6.2,-1.1) {gửi MQTT};
         \draw[farr] (s4) -- (s5);
         \draw[farr] (s5) -- (s6);
         \draw[farr] (s6) -- (s7);
@@ -554,7 +561,7 @@ Sơ đồ mạng triển khai ở Hình \ref{fig:ch4-deployment-view} chỉ rõ 
         \draw[farr] (s10) -- (s11);
         \draw[farr] (s11) -- (s12);
         \draw[farr, dashed] (s12.south) -- ++(0,-0.8) -| (-1.6,0) -- (s1.west);
-        \node[flbl, below] at (0.75,-5.9) {Polling / cập nhật UI};
+        \node[flbl, below] at (0.75,-5.9) {Truy vấn định kỳ};
     \end{tikzpicture}
     \caption{Trình tự luồng dữ liệu 12 bước điều khiển thiết bị đèn từ Mobile App.}
     \label{fig:ch4-e2e-command-flow}
@@ -577,9 +584,9 @@ Cụ thể, Cloud Backend chưa hiện thực các API và mô hình quản lý 
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[font=\footnotesize, >=Stealth]
-        \node[fblk, cMob, minimum width=3.7cm, minimum height=2.6cm] (c1) at (0,0) {\textbf{Đã triển khai}\\\textit{(Prototype Core)}\\NCP/Light/Switch\\Gateway MQTT Native\\Cloud Commands \& DB\\Mobile App \& API\\EC2 Compose Deploy};
-        \node[fblk, cQueue, minimum width=3.7cm, minimum height=2.6cm] (c2) at (5.0,0) {\textbf{Mức Contract}\\\textit{(System Boundary)}\\OTA Campaign Schema\\Silicon Labs Configs\\Partial Local Rules\\Mobile Provisioning UI};
-        \node[fblk, cFut, minimum width=3.7cm, minimum height=2.6cm] (c3) at (10.0,0) {\textbf{Hướng Product}\\\textit{(Future Work)}\\Security Hardening\\OTA Runtime Engine\\Multi-Gateway Scale\\Observability \& Alerts\\Onboarding UX};
+        \node[fblk, cMob, minimum width=3.7cm, minimum height=2.6cm] (c1) at (0,0) {\textbf{Đã triển khai}\\\textit{(Lõi prototype)}\\NCP/Light/Switch\\Gateway MQTT Native\\Lệnh Cloud \& CSDL\\Mobile App \& API\\Triển khai EC2 Compose};
+        \node[fblk, cQueue, minimum width=3.7cm, minimum height=2.6cm] (c2) at (5.0,0) {\textbf{Mức Contract}\\\textit{(Ranh giới hệ thống)}\\OTA Campaign Schema\\Cấu hình Silicon Labs\\Luật cục bộ (một phần)\\Mobile Provisioning UI};
+        \node[fblk, cFut, minimum width=3.7cm, minimum height=2.6cm] (c3) at (10.0,0) {\textbf{Hướng Product}\\\textit{(Hướng phát triển)}\\Tăng cường bảo mật\\OTA Runtime Engine\\Mở rộng đa Gateway\\Giám sát \& Cảnh báo\\Onboarding UX};
         \draw[farr, line width=0.9pt] (c1) -- (c2);
         \draw[farr, line width=0.9pt] (c2) -- (c3);
     \end{tikzpicture}

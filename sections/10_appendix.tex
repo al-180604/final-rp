@@ -1,0 +1,35 @@
+% ========================================
+% PHỤ LỤC
+% ========================================
+\clearpage
+\phantomsection
+\addcontentsline{toc}{chapter}{PHỤ LỤC: MÃ NGUỒN VÀ DỰ ÁN THỰC TẾ}
+\chapter*{PHỤ LỤC: MÃ NGUỒN VÀ DỰ ÁN THỰC TẾ}
+\markboth{PHỤ LỤC: MÃ NGUỒN VÀ DỰ ÁN THỰC TẾ}{PHỤ LỤC: MÃ NGUỒN VÀ DỰ ÁN THỰC TẾ}
+\label{sec:appendix}
+
+Để hỗ trợ việc đánh giá khách quan và kiểm chứng kết quả thực hiện của đồ án, toàn bộ mã nguồn hệ thống cùng video minh họa quá trình hoạt động thực tế đã được số hóa và lưu trữ trực tuyến. 
+
+Người đọc có thể sử dụng các đường dẫn liên kết hoặc quét mã QR tương ứng dưới đây để truy cập nhanh:
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=0.65\textwidth]{Images/git-qr.jpg} 
+        \caption{Mã QR truy cập Kho mã nguồn GitHub}
+        \label{fig:qr-git}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.45\textwidth}
+        \centering
+        \includegraphics[width=0.65\textwidth]{Images/demo-qr.jpg} 
+        \caption{Mã QR truy cập Video Demo hệ thống}
+        \label{fig:qr-demo}
+    \end{minipage}
+\end{figure}
+
+\begin{itemize}[leftmargin=1.2cm]
+    \item \textbf{Kho mã nguồn GitHub (Hình \ref{fig:qr-git}):} Lưu trữ toàn bộ mã nguồn của các thành phần trong hệ thống bao gồm: firmware thiết bị đầu cuối Zigbee (Đèn, Công tắc, Cảm biến), mã nguồn C của ứng dụng Gateway (Z3GatewayHost), Cloud Backend (FastAPI, database migrations) và ứng dụng di động Flutter.
+    \item \textbf{Video Demo hệ thống (Hình \ref{fig:qr-demo}):} Ghi lại quá trình hoạt động thực nghiệm thực tế bao gồm các kịch bản: thiết bị gia nhập mạng bảo mật thông qua mã cài đặt (Install Code), điều khiển bật/tắt đèn thời gian thực từ ứng dụng di động, các kịch bản tự động hóa cục bộ (Local Automation), và khả năng tự phục hồi kết nối của Gateway khi mất mạng.
+\end{itemize}

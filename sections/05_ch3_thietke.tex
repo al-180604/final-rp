@@ -75,10 +75,11 @@ Hệ thống có ba nhóm tác nhân chính. Người dùng thao tác qua Mobile
 
 Bảng~\ref{tab:ch3-actors} làm rõ sự phân công trách nhiệm giữa ba nhóm tác nhân chính trong hệ thống. Nhờ việc phân định rõ giao tiếp chính của từng tác nhân, phần thiết kế API, MQTT contract và cấu trúc cơ sở dữ liệu sẽ được xây dựng theo đúng vòng đời dữ liệu của hệ thống.
 
+\newpage
 \subsection{Yêu cầu chức năng}
 \label{sec:ch3-yeucau-chucnang}
 
-Các yêu cầu chức năng được rút ra từ đường chạy hiện tại của hệ thống. Bảng \ref{tab:ch3-func-req} dùng mã FR để thuận tiện đối chiếu khi thiết kế API, cơ sở dữ liệu và MQTT contract.
+Các yêu cầu chức năng được rút ra từ đường chạy hiện tại của hệ thống được tổng hợp chi tiết trong Bảng \ref{tab:ch3-func-req}.
 
 \begin{table}[H]
     \centering
@@ -86,30 +87,31 @@ Các yêu cầu chức năng được rút ra từ đường chạy hiện tại
     \label{tab:ch3-func-req}
     \footnotesize
     \setlength{\tabcolsep}{3pt}
-    \begin{tabular}{|>{\raggedright\arraybackslash}p{1.4cm}|>{\raggedright\arraybackslash}p{8.0cm}|>{\raggedright\arraybackslash}p{4.6cm}|}
+    \begin{tabular}{|>{\raggedright\arraybackslash}p{\dimexpr0.65\textwidth-2\tabcolsep-1.5\arrayrulewidth}|>{\raggedright\arraybackslash}p{\dimexpr0.35\textwidth-2\tabcolsep-1.5\arrayrulewidth}|}
         \hline
-        \textbf{Mã} & \textbf{Yêu cầu} & \textbf{Ghi chú thiết kế} \\
+        \textbf{Yêu cầu} & \textbf{Ghi chú thiết kế} \\
         \hline
-        FR-01 & Người dùng xem được danh sách thiết bị, thông tin phòng và trạng thái mới nhất của từng thiết bị. & Dữ liệu lấy từ Cloud qua REST API. \\
+        Người dùng xem được danh sách thiết bị, thông tin phòng và trạng thái mới nhất của từng thiết bị. & Dữ liệu lấy từ Cloud qua REST API. \\
         \hline
-        FR-02 & Người dùng điều khiển bật/tắt đèn từ Mobile App. & Lệnh đi qua Cloud, MQTT Broker, Gateway rồi tới mạng Zigbee. \\
+        Người dùng điều khiển bật/tắt đèn từ Mobile App. & Lệnh đi qua Cloud, MQTT Broker, Gateway rồi tới mạng Zigbee. \\
         \hline
-        FR-03 & Gateway gửi reported state, registry, event và health lên Cloud. & Các bản tin uplink đi qua MQTT. \\
+        Gateway gửi reported state, registry, event và health lên Cloud. & Các bản tin uplink đi qua MQTT. \\
         \hline
-        FR-04 & Cloud lưu command, state, event và automation rule để Mobile truy vấn lại. & PostgreSQL là nơi lưu trữ chính. \\
+        Cloud lưu command, state, event và automation rule để Mobile truy vấn lại. & PostgreSQL là nơi lưu trữ chính. \\
         \hline
-        FR-05 & Người dùng xem được event log và trạng thái xử lý command. & Mobile có cơ chế polling command sau khi gửi lệnh. \\
+        Người dùng xem được event log và trạng thái xử lý command. & Mobile có cơ chế polling command sau khi gửi lệnh. \\
         \hline
-        FR-06 & Người dùng tạo, sửa, bật/tắt và xóa automation rule ở phía Cloud. & Rule được lưu ở Cloud và publish lên desired automation topic; Gateway hiện chưa tự động consume topic này. \\
+        Người dùng tạo, sửa, bật/tắt và xóa automation rule ở phía Cloud. & Rule được lưu ở Cloud và publish lên desired automation topic; Gateway hiện chưa tự động consume topic này. \\
         \hline
-        FR-07 & Hệ thống hỗ trợ mở/đóng commissioning và rediscover thiết bị qua Gateway API. & Đây là lệnh Gateway-level, không phải lệnh điều khiển trực tiếp một thiết bị cụ thể. \\
+        Hệ thống hỗ trợ mở/đóng commissioning và rediscover thiết bị qua Gateway API. & Đây là lệnh Gateway-level, không phải lệnh điều khiển trực tiếp một thiết bị cụ thể. \\
         \hline
     \end{tabular}
     \setlength{\tabcolsep}{6pt}
 \end{table}
 
-Bảng~\ref{tab:ch3-func-req} liệt kê đầy đủ các yêu cầu chức năng cần thực hiện trong phạm vi đồ án. Mã FR giúp việc đối chiếu yêu cầu với endpoint API, MQTT topic tương ứng và các kịch bản kiểm thử ở các chương sau được thuận tiện hơn.
+Bảng~\ref{tab:ch3-func-req} liệt kê đầy đủ các yêu cầu chức năng cần thực hiện trong phạm vi đồ án, làm cơ sở để đối chiếu khi thiết kế các endpoint API, MQTT topic tương ứng và xây dựng các kịch bản kiểm thử ở các chương sau.
 
+\newpage
 \subsection{Yêu cầu phi chức năng}
 \label{sec:ch3-yeucau-phichucnang}
 
@@ -335,6 +337,7 @@ Automation hiện có hai phần cần phân biệt. Phía Cloud đã có API t�
 
 Thiết kế này cho phép báo cáo rõ phần đã làm và phần còn mở. Cloud đã có nền tảng quản lý rule. Gateway đã có hướng xử lý local rule. Bước còn thiếu để có dynamic cloud-synced automation là cơ chế Gateway nhận desired automation, đồng bộ rule và chạy rule đó theo event thực tế.
 
+\newpage
 \section{Thiết kế MQTT contract}
 \label{sec:ch3-contract}
 
