@@ -135,6 +135,7 @@ Gia nhập DHT11 & Cảm biến DHT11 Router kết nối Coordinator & Mở cử
 \renewcommand{\arraystretch}{1.0}
 \end{table}
 
+\newpage
 \subsection{Nhóm 2: Kiểm thử truyền nhận trạng thái và điều khiển}
 \label{sec:ch5-group2-dataflow}
 
@@ -196,22 +197,7 @@ Quét Timeout lệnh & Xử lý khi gửi lệnh tới thiết bị mất nguồ
 \renewcommand{\arraystretch}{1.0}
 \end{table}
 
-% ========================================
-% 5.4 ĐÁNH GIÁ KẾT QUẢ KIỂM THỬ
-% ========================================
-\newpage
-\section{Đánh giá kết quả kiểm thử}
-\label{sec:ch5-evaluation}
-
-Thông qua việc thực hiện thành công các nhóm kịch bản kiểm thử hệ thống
-ở trên, các tiêu chí đánh giá về độ chính xác và hiệu năng vận hành đã
-được phân tích cụ thể:
-
-\subsection{Mức độ hoàn thành các tiêu chí hệ thống}
-\label{sec:ch5-criteria-eval}
-
-Bảng \ref{tab:ch5-eval-summary} tổng hợp mức độ hoàn thành và đánh giá
-kết quả vận hành thực tế đối với từng luồng chức năng quan trọng của hệ thống.
+Kết thúc ba nhóm kiểm thử trên, Bảng \ref{tab:ch5-eval-summary} tổng hợp mức độ hoàn thành và đánh giá kết quả vận hành thực tế đối với từng luồng chức năng quan trọng của hệ thống.
 
 \begin{table}[H]
 \centering
@@ -228,7 +214,21 @@ Tính nhất quán giao diện & Đạt 95\% & Trạng thái biểu diễn trên
 \end{tabular}
 \end{table}
 
-Bảng~\ref{tab:ch5-eval-summary} chỉ ra rằng các chức năng cốt lõi gồm đồng bộ trạng thái Uplink và điều khiển Downlink đạt tỷ lệ hoàn thành 100\%, khẳng định tính đúng đắn của kiến trúc đa lớp đã thiết kế. Các hạng mục chưa đạt 100\% phản ánh trung thực các giới hạn kỹ thuật còn tồn tại, làm cơ sở để đề xuất hướng phát triển trong chương kết luận.
+% ========================================
+% 5.4 ĐÁNH GIÁ KẾT QUẢ KIỂM THỬ
+% ========================================
+\newpage
+\section{Đánh giá kết quả kiểm thử}
+\label{sec:ch5-evaluation}
+
+Thông qua việc thực hiện thành công các nhóm kịch bản kiểm thử hệ thống
+ở trên, các tiêu chí đánh giá về độ chính xác và hiệu năng vận hành đã
+được phân tích cụ thể:
+
+\subsection{Mức độ hoàn thành các tiêu chí hệ thống}
+\label{sec:ch5-criteria-eval}
+
+Bảng~\ref{tab:ch5-eval-summary} (trình bày ở Mục~\ref{sec:ch5-group3-rules-faults}) chỉ ra rằng các chức năng cốt lõi gồm đồng bộ trạng thái Uplink và điều khiển Downlink đạt tỷ lệ hoàn thành 100\%, khẳng định tính đúng đắn của kiến trúc đa lớp đã thiết kế. Các hạng mục chưa đạt 100\% phản ánh trung thực các giới hạn kỹ thuật còn tồn tại, làm cơ sở để đề xuất hướng phát triển trong chương kết luận.
 
 \subsection{Phân tích độ trễ của hệ thống}
 \label{sec:ch5-latency-analysis}

@@ -29,13 +29,7 @@ Hơn nữa, các giải pháp smart building thương mại hiện nay thường
 \section{Mục tiêu của đồ án}
 \label{sec:ch1-muctieu}
 
-Để giải quyết các bài toán đặt ra trong bối cảnh trên, đồ án xác định rõ mục tiêu tổng quát và các mục tiêu cụ thể cần đạt được.
-
-\subsection{Mục tiêu tổng quát}
-Mục tiêu tổng quát của đồ án là thiết kế, chế tạo và tích hợp hoàn chỉnh một hệ thống IoT quản lý Smart Building dựa trên chuẩn truyền thông không dây Zigbee, kết nối qua Gateway C tới hệ thống Cloud Backend, hỗ trợ giám sát trạng thái thiết bị thực tế gần thời gian thực và tự động hóa điều khiển phụ tải.
-
-\subsection{Mục tiêu cụ thể}
-Để hiện thực hóa mục tiêu tổng quát, đồ án đề ra các mục tiêu cụ thể cho từng thành phần trong hệ thống:
+Để giải quyết các bài toán đặt ra trong bối cảnh trên, đồ án xác định mục tiêu tổng quát là thiết kế, chế tạo và tích hợp hoàn chỉnh một hệ thống IoT quản lý Smart Building dựa trên chuẩn truyền thông không dây Zigbee, kết nối qua Gateway C tới hệ thống Cloud Backend, hỗ trợ giám sát trạng thái thiết bị thực tế gần thời gian thực và tự động hóa điều khiển phụ tải. Để hiện thực hóa mục tiêu đó, đồ án đề ra các mục tiêu cụ thể cho từng thành phần trong hệ thống:
 
 \textbf{Phía thiết bị cuối (End Devices):} Thiết kế và nạp firmware cho các thiết bị Zigbee 3.0 dựa trên vi điều khiển EFR32MG12 bao gồm thiết bị đèn (Z3Light), công tắc (Z3Switch) và cảm biến hiện diện (Occupancy/Motion Sensor) hoạt động ổn định trong mạng mesh Zigbee.
 
@@ -81,6 +75,7 @@ Do hạn chế về mặt thời gian và trang thiết bị phần cứng, đ�
 % ========================================
 % 1.4 PHƯƠNG PHÁP THỰC HIỆN
 % ========================================
+\newpage
 \section{Phương pháp thực hiện}
 \label{sec:ch1-phuongphap}
     
@@ -88,7 +83,34 @@ Do hạn chế về mặt thời gian và trang thiết bị phần cứng, đ�
 
 \begin{figure}[H]
     \centering
-    % Do chưa có hình thật, sử dụng caption và nhãn để mô phỏng sơ đồ khối phương pháp
+    \begin{tikzpicture}[node distance=1.1cm]
+        % --- Các khối giai đoạn ---
+        \node[fblk, cCloud, minimum width=10cm]
+            (gd1) {\textbf{Giai đoạn 1:} Khảo sát và nghiên cứu công nghệ\\
+                   {\scriptsize Zigbee 3.0, ZCL, MQTT, REST API}};
+
+        \node[fblk, cGw, minimum width=10cm, below=of gd1]
+            (gd2) {\textbf{Giai đoạn 2:} Thiết kế hệ thống\\
+                   {\scriptsize Kiến trúc 4 lớp, CSDL PostgreSQL, MQTT Contract}};
+
+        \node[fblk, cMob, minimum width=10cm, below=of gd2]
+            (gd3) {\textbf{Giai đoạn 3:} Triển khai chi tiết từng module\\
+                   {\scriptsize Firmware EFR32, Z3Gateway (C), FastAPI Cloud}};
+
+        \node[fblk, cQueue, minimum width=10cm, below=of gd3]
+            (gd4) {\textbf{Giai đoạn 4:} Tích hợp hệ thống\\
+                   {\scriptsize NCP--UART--Gateway--Mosquitto--Cloud}};
+
+        \node[fblk, cZig, minimum width=10cm, below=of gd4]
+            (gd5) {\textbf{Giai đoạn 5:} Kiểm thử và đánh giá\\
+                   {\scriptsize pytest, kiểm thử E2E trên phần cứng thật}};
+
+        % --- Mũi tên nối tuần tự ---
+        \draw[farr] (gd1) -- (gd2);
+        \draw[farr] (gd2) -- (gd3);
+        \draw[farr] (gd3) -- (gd4);
+        \draw[farr] (gd4) -- (gd5);
+    \end{tikzpicture}
     \caption{Quy trình nghiên cứu và triển khai hệ thống}
     \label{fig:ch1-flowchart}
 \end{figure}
